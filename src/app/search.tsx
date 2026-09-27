@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { SEARCH_RESULT_LIMIT } from '@/config';
 import type { NotebookId, SearchHit } from '@/domain/types';
 import { useSearch, useSearchScopes } from '@/hooks/useSearch';
 import { useTheme } from '@/theme/useTheme';
@@ -71,7 +72,7 @@ export default function SearchScreen() {
           keyboardDismissMode="on-drag"
           ListHeaderComponent={
             <Text style={[styles.status, { color: colors.muted, fontFamily: fonts.regular }]}>
-              「{searchedKeyword}」を含むページ {hits.length}件
+              「{searchedKeyword}」を含むページ {formatHitCount(hits.length)}
             </Text>
           }
           renderItem={({ item }) => <SearchResultRow hit={item} onPress={() => openHit(item)} />}
@@ -198,3 +199,8 @@ const styles = StyleSheet.create({
   },
   status: { paddingHorizontal: 20, paddingBottom: 6, fontSize: 13 },
 });
+
+/** 上限で打ち切った場合は、実際にはもっとあることが分かるように「以上」をつける */
+function formatHitCount(count: number): string {
+  return count >= SEARCH_RESULT_LIMIT ? `${SEARCH_RESULT_LIMIT}件以上` : `${count}件`;
+}

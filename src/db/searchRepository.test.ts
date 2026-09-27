@@ -100,6 +100,19 @@ describe('searchPages', () => {
     expect(await searchPages(db, { keyword: '  ', scopeNotebookId: null })).toEqual([]);
   });
 
+  test('上限はノートごとの絞り込みの後にかかる（タイトルだけ一致したノートが多くても欠けない。#36）', async () => {
+    const db = await createMigratedTestDb();
+    for (const id of ['n1', 'n2', 'n3']) {
+      await insertNote(db, buildNote({ id, title: `会議メモ ${id}` }));
+      await insertPage(db, buildPage({ id: `${id}-p0`, noteId: id, position: 0, ocrText: '本文' }));
+      await insertPage(db, buildPage({ id: `${id}-p1`, noteId: id, position: 1, ocrText: '本文' }));
+    }
+    const hits = await searchPages(db, { keyword: '会議', scopeNotebookId: null, limit: 2 });
+    expect(hits.map((hit) => hit.noteId)).toHaveLength(2);
+    expect(new Set(hits.map((hit) => hit.noteId)).size).toBe(2);
+    expect(hits.every((hit) => hit.pagePosition === 0)).toBe(true);
+  });
+
   test('件数の上限を守る', async () => {
     const db = await createLibrary();
     expect(await searchPages(db, { keyword: '値', scopeNotebookId: null, limit: 1 })).toHaveLength(

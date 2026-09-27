@@ -27,11 +27,14 @@ export async function searchPages(
 
   const rows = await queryMatchingPages(db, keyword, query.scopeNotebookId, query.limit);
   const notebooks = await listAllNotebooks(db);
-  return keepOnePagePerTitleOnlyMatch(rows, keyword).map((row) =>
-    toSearchHit(row, keyword, notebooks),
-  );
+  return rows.map((row) => toSearchHit(row, keyword, notebooks));
 }
 
+/**
+ * 一致したページを返す。タイトルだけが一致したノートは全ページが該当してしまうため1ページ目だけにし、
+ * 本文（OCR テキスト）が一致したページがあるノートはそのページだけにする。
+ * この絞り込みを件数の上限より先に行うため、SQL の中（ウィンドウ関数）で行う（#36）
+ */
 async function queryMatchingPages(
   db: Db,
   keyword: string,
@@ -44,39 +47,34 @@ async function queryMatchingPages(
     ? `AND notes.notebook_id IN (${scopeIds.map(() => '?').join(', ')})`
     : '';
   return db.all<SearchRow>(
-    `SELECT pages_fts.page_id, pages_fts.title, pages_fts.ocr_text,
-            pages.position, notes.id AS note_id, notes.notebook_id
-     FROM pages_fts
-     JOIN pages ON pages.id = pages_fts.page_id
-     JOIN notes ON notes.id = pages.note_id
-     WHERE (pages_fts.title LIKE ? ESCAPE '\\' OR pages_fts.ocr_text LIKE ? ESCAPE '\\')
-       ${scopeCondition}
-     ORDER BY notes.updated_at DESC, pages.position
+    `WITH matched AS (
+       SELECT pages_fts.page_id, pages_fts.title, pages_fts.ocr_text,
+              pages.position, notes.id AS note_id, notes.notebook_id, notes.updated_at,
+              (pages_fts.ocr_text LIKE ? ESCAPE '\\') AS is_text_match
+       FROM pages_fts
+       JOIN pages ON pages.id = pages_fts.page_id
+       JOIN notes ON notes.id = pages.note_id
+       WHERE (pages_fts.title LIKE ? ESCAPE '\\' OR pages_fts.ocr_text LIKE ? ESCAPE '\\')
+         ${scopeCondition}
+     ),
+     ranked AS (
+       SELECT *,
+              max(is_text_match) OVER (PARTITION BY note_id) AS note_has_text_match,
+              row_number() OVER (PARTITION BY note_id ORDER BY position) AS page_rank
+       FROM matched
+     )
+     SELECT page_id, title, ocr_text, position, note_id, notebook_id
+     FROM ranked
+     WHERE is_text_match = 1 OR (note_has_text_match = 0 AND page_rank = 1)
+     ORDER BY updated_at DESC, position
      LIMIT ?`,
-    [pattern, pattern, ...(scopeIds ?? []), limit],
+    [pattern, pattern, pattern, ...(scopeIds ?? []), limit],
   );
 }
 
 /** LIKE の特殊文字（\ % _）を、ESCAPE '\' で文字どおりに扱わせる */
 export function escapeLikePattern(keyword: string): string {
   return keyword.replace(/[\\%_]/g, (char) => `\\${char}`);
-}
-
-/**
- * タイトルだけが一致したノートは全ページが該当してしまうため、1ページ目だけを残す。
- * 本文（OCR テキスト）が一致したページがあるノートは、そのページだけを残す。
- */
-function keepOnePagePerTitleOnlyMatch(rows: SearchRow[], keyword: string): SearchRow[] {
-  const notesWithTextMatch = new Set(
-    rows.filter((row) => indexOfKeyword(row.ocr_text, keyword) >= 0).map((row) => row.note_id),
-  );
-  const firstPageShown = new Set<string>();
-  return rows.filter((row) => {
-    if (notesWithTextMatch.has(row.note_id)) return indexOfKeyword(row.ocr_text, keyword) >= 0;
-    if (firstPageShown.has(row.note_id)) return false;
-    firstPageShown.add(row.note_id);
-    return true;
-  });
 }
 
 function toSearchHit(row: SearchRow, keyword: string, notebooks: Notebook[]): SearchHit {

@@ -29,6 +29,7 @@ export default function CaptureScreen() {
 
   async function save() {
     setIsSaving(true);
+    const startedAt = performance.now();
     try {
       if (isAddingPages) {
         await addPagesToNote(db, params.noteId as NoteId, images);
@@ -44,6 +45,13 @@ export default function CaptureScreen() {
     } catch (error) {
       setErrorMessage(isAppError(error) ? errorMessages[error.kind] : '保存できませんでした');
       setIsSaving(false);
+    } finally {
+      // 性能計測（#33、NFR-P-04: 保存から操作可能まで2秒以内）
+      if (__DEV__) {
+        console.log(
+          `[perf] save ${images.length}p: ${(performance.now() - startedAt).toFixed(0)}ms`,
+        );
+      }
     }
   }
 

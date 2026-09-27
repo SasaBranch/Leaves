@@ -21,8 +21,12 @@ export function useDataQuery<T>(
   useEffect(() => {
     let isCurrent = true;
     const load = () => {
+      const startedAt = performance.now();
       query(db).then(
         (result) => {
+          // 性能計測（#33、NFR-P）のため、開発ビルドでは読み込み時間を記録する
+          if (__DEV__)
+            console.log(`[perf] ${key}: ${(performance.now() - startedAt).toFixed(0)}ms`);
           if (!isCurrent) return;
           setData(result);
           setError(undefined);

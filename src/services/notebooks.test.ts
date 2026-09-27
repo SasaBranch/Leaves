@@ -25,6 +25,7 @@ import {
 const mockDeletedImages: string[][] = [];
 jest.mock('@/storage/pageImages', () => ({
   deletePageImages: (ids: string[]) => mockDeletedImages.push(ids),
+  withImageOperation: (operation: () => Promise<unknown>) => operation(),
 }));
 let mockNotebookCount = 0;
 jest.mock('@/native/randomId', () => ({ newNotebookId: () => `new${mockNotebookCount++}` }));

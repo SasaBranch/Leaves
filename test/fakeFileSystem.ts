@@ -43,6 +43,9 @@ export class File {
   delete() {
     fakeFiles.delete(this.uri);
   }
+  write() {
+    fakeFiles.add(this.uri);
+  }
   move(destination: File) {
     fakeFiles.delete(this.uri);
     fakeFiles.add(destination.uri);

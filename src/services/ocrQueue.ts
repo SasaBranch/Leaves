@@ -59,7 +59,10 @@ async function recognizePage(db: Db, pageId: PageId): Promise<void> {
   await updateOcrStatus(db, pageId, 'processing', new Date().toISOString());
   notifyDataChanged();
   try {
+    const startedAt = performance.now();
     const result = await recognizeText(pageImageFile(pageId).uri);
+    // 性能計測（#33、NFR-P-05: 1ページ3秒以内）
+    if (__DEV__) console.log(`[perf] ocr: ${(performance.now() - startedAt).toFixed(0)}ms`);
     const lines = toRelativeOcrLines(result.lines, page);
     // 認識中にページが削除されていても、UPDATE が0件になるだけで問題ない
     await saveOcrResult(db, pageId, { text: result.text, lines }, new Date().toISOString());

@@ -10,6 +10,7 @@ import {
   deletePageImages,
   discardCapturedImages,
   storePageImages,
+  withImageOperation,
   type StoredPageImage,
 } from '@/storage/pageImages';
 
@@ -19,9 +20,8 @@ export async function createNoteFromCapture(
   db: Db,
   input: { images: CapturedImage[]; title: string; notebookId: NotebookId | null },
 ): Promise<NoteId> {
-  const storedPages = await storePageImages(input.images);
   const noteId = newNoteId();
-  await registerOrDiscardImages(storedPages, (now) =>
+  const storedPages = await storeAndRegisterImages(input.images, (pages, now) =>
     db.transaction(async (tx) => {
       await insertNote(tx, {
         id: noteId,
@@ -30,7 +30,7 @@ export async function createNoteFromCapture(
         createdAt: now,
         updatedAt: now,
       });
-      await insertPages(tx, noteId, storedPages, 0, now);
+      await insertPages(tx, noteId, pages, 0, now);
     }),
   );
   finishCapture(input.images, storedPages);
@@ -43,28 +43,34 @@ export async function addPagesToNote(
   noteId: NoteId,
   images: CapturedImage[],
 ): Promise<void> {
-  const storedPages = await storePageImages(images);
-  await registerOrDiscardImages(storedPages, (now) =>
+  const storedPages = await storeAndRegisterImages(images, (pages, now) =>
     db.transaction(async (tx) => {
       const firstPosition = await getNextPagePosition(tx, noteId);
-      await insertPages(tx, noteId, storedPages, firstPosition, now);
+      await insertPages(tx, noteId, pages, firstPosition, now);
       await markNoteUpdated(tx, noteId, now);
     }),
   );
   finishCapture(images, storedPages);
 }
 
-/** DB 登録に失敗したら、保存した画像を消してから例外を投げる（画像だけが残らないように） */
-async function registerOrDiscardImages(
-  storedPages: StoredPageImage[],
-  register: (now: IsoDateTime) => Promise<void>,
-): Promise<void> {
-  try {
-    await register(new Date().toISOString());
-  } catch (error) {
-    deletePageImages(storedPages.map((page) => page.id));
-    throw error;
-  }
+/**
+ * 画像を先に保存し、DB に登録する。登録に失敗したら保存した画像を消してから例外を投げる
+ * （画像だけが残らないように。NFR-R-01）。途中で終了した場合に備えて全体を withImageOperation で囲む
+ */
+function storeAndRegisterImages(
+  images: CapturedImage[],
+  register: (pages: StoredPageImage[], now: IsoDateTime) => Promise<void>,
+): Promise<StoredPageImage[]> {
+  return withImageOperation(async () => {
+    const storedPages = await storePageImages(images);
+    try {
+      await register(storedPages, new Date().toISOString());
+    } catch (error) {
+      deletePageImages(storedPages.map((page) => page.id));
+      throw error;
+    }
+    return storedPages;
+  });
 }
 
 async function insertPages(

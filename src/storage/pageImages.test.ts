@@ -3,11 +3,14 @@ import type { CapturedImage } from '@/domain/types';
 
 import { fakeDisk, fakeFiles } from '../../test/fakeFileSystem';
 import {
+  clearImageOperationMark,
   deletePageImages,
   discardCapturedImages,
   listStoredPageIds,
   resizeToFitWithin,
   storePageImages,
+  wasImageOperationInterrupted,
+  withImageOperation,
 } from './pageImages';
 
 jest.mock('expo-file-system', () => jest.requireActual('../../test/fakeFileSystem'));
@@ -123,4 +126,37 @@ test('discardCapturedImages: 一時画像を消す', () => {
   fakeFiles.add('cache/capture/a.jpg');
   discardCapturedImages([captured('a.jpg')]);
   expect(fakeFiles.size).toBe(0);
+});
+
+test('withImageOperation: 実行中は印を残し、終わったら（失敗しても）消す', async () => {
+  let markedDuringOperation = false;
+  await withImageOperation(async () => {
+    markedDuringOperation = wasImageOperationInterrupted();
+  });
+  expect(markedDuringOperation).toBe(true);
+  expect(wasImageOperationInterrupted()).toBe(false);
+
+  await expect(
+    withImageOperation(async () => {
+      throw new Error('失敗');
+    }),
+  ).rejects.toThrow('失敗');
+  expect(wasImageOperationInterrupted()).toBe(false);
+});
+
+test('withImageOperation: 重なって実行されたときは、最後の操作が終わるまで印を消さない', async () => {
+  let finishFirst = () => {};
+  const first = withImageOperation(() => new Promise<void>((resolve) => (finishFirst = resolve)));
+  await withImageOperation(async () => {});
+  expect(wasImageOperationInterrupted()).toBe(true);
+  finishFirst();
+  await first;
+  expect(wasImageOperationInterrupted()).toBe(false);
+});
+
+test('clearImageOperationMark: 前回の実行で残った印を消す', () => {
+  fakeFiles.add('doc/image-operation-in-progress');
+  expect(wasImageOperationInterrupted()).toBe(true);
+  clearImageOperationMark();
+  expect(wasImageOperationInterrupted()).toBe(false);
 });

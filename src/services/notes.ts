@@ -17,7 +17,7 @@ import {
 import { normalizeName } from '@/domain/name';
 import type { NoteId, NotebookId, PageId } from '@/domain/types';
 import { notifyDataChanged } from '@/state/dataChanges';
-import { deletePageImages } from '@/storage/pageImages';
+import { deletePageImages, withImageOperation } from '@/storage/pageImages';
 
 export async function renameNote(db: Db, id: NoteId, title: string): Promise<void> {
   await updateNoteTitle(db, id, normalizeName(title), new Date().toISOString());
@@ -33,9 +33,11 @@ export async function moveNote(db: Db, id: NoteId, notebookId: NotebookId | null
 export async function deleteNote(db: Db, id: NoteId): Promise<void> {
   // ページ行は CASCADE で消えるので、消す画像を先に控えておく
   const pageIds = await listPageIdsOfNote(db, id);
-  await deleteNoteRow(db, id);
+  await withImageOperation(async () => {
+    await deleteNoteRow(db, id);
+    deletePageImages(pageIds);
+  });
   notifyDataChanged();
-  deletePageImages(pageIds);
 }
 
 export async function reorderPages(
@@ -58,17 +60,19 @@ export async function deletePage(db: Db, pageId: PageId): Promise<{ noteDeleted:
   if (!page) throw new Error(`ページがありません: ${pageId}`);
 
   let noteDeleted = false;
-  await db.transaction(async (tx) => {
-    const remainingPageIds = await listRemainingPageIds(tx, page.noteId, pageId);
-    noteDeleted = remainingPageIds.length === 0;
-    if (noteDeleted) {
-      await deleteNoteRow(tx, page.noteId);
-    } else {
-      await deletePageAndCompactPositions(tx, page.noteId, pageId, remainingPageIds);
-    }
+  await withImageOperation(async () => {
+    await db.transaction(async (tx) => {
+      const remainingPageIds = await listRemainingPageIds(tx, page.noteId, pageId);
+      noteDeleted = remainingPageIds.length === 0;
+      if (noteDeleted) {
+        await deleteNoteRow(tx, page.noteId);
+      } else {
+        await deletePageAndCompactPositions(tx, page.noteId, pageId, remainingPageIds);
+      }
+    });
+    deletePageImages([pageId]);
   });
   notifyDataChanged();
-  deletePageImages([pageId]);
   return { noteDeleted };
 }
 

@@ -16,7 +16,7 @@ import { normalizeName } from '@/domain/name';
 import type { NotebookColor, NotebookId } from '@/domain/types';
 import { newNotebookId } from '@/native/randomId';
 import { notifyDataChanged } from '@/state/dataChanges';
-import { deletePageImages } from '@/storage/pageImages';
+import { deletePageImages, withImageOperation } from '@/storage/pageImages';
 
 export async function createNotebook(
   db: Db,
@@ -67,8 +67,10 @@ export async function moveNotebook(
 export async function deleteNotebookWithContents(db: Db, id: NotebookId): Promise<void> {
   const subtreeIds = await listNotebookSubtreeIds(db, id);
   const pageIds = await listPageIdsInNotebooks(db, subtreeIds);
-  await deleteNotebookRows(db, id);
-  deletePageImages(pageIds);
+  await withImageOperation(async () => {
+    await deleteNotebookRows(db, id);
+    deletePageImages(pageIds);
+  });
   notifyDataChanged();
 }
 

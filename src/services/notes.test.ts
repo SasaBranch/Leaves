@@ -17,6 +17,7 @@ import { deleteNote, deletePage, moveNote, renameNote, reorderPages } from './no
 const mockDeletedImages: string[][] = [];
 jest.mock('@/storage/pageImages', () => ({
   deletePageImages: (ids: string[]) => mockDeletedImages.push(ids),
+  withImageOperation: (operation: () => Promise<unknown>) => operation(),
 }));
 const mockNotify = jest.fn();
 jest.mock('@/state/dataChanges', () => ({ notifyDataChanged: () => mockNotify() }));

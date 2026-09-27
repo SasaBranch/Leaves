@@ -17,6 +17,7 @@ jest.mock('@/storage/pageImages', () => ({
     images.map(() => ({ id: `stored${mockStorage.storedCount++}`, width: 1800, height: 2400 })),
   deletePageImages: (ids: string[]) => mockStorage.deleted.push(ids),
   discardCapturedImages: (images: CapturedImage[]) => mockStorage.discarded.push(images),
+  withImageOperation: (operation: () => Promise<unknown>) => operation(),
 }));
 jest.mock('@/native/randomId', () => ({ newNoteId: () => 'new-note' }));
 const mockEnqueueOcr = jest.fn();

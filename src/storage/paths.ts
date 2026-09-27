@@ -16,6 +16,10 @@ export const pageImageFile = (id: PageId) =>
 export const thumbnailFile = (id: PageId) =>
   new File(thumbnailsDirectory(), `${id}${PAGE_IMAGE_EXTENSION}`);
 
+/** 画像の保存・削除の途中であることを示す印（ADR 0015）。あれば前回の実行が途中で終わっている */
+export const imageOperationMarkerFile = () =>
+  new File(Paths.document, 'image-operation-in-progress');
+
 /** 画像のファイル名からページ ID を取り出す。ページ画像でないファイルは null */
 export function pageIdFromFileName(fileName: string): PageId | null {
   return fileName.endsWith(PAGE_IMAGE_EXTENSION)

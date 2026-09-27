@@ -1,13 +1,22 @@
 // 起動時の保守処理（詳細設計書 9.6）。画面表示の後に裏で行い、起動時間に影響させない（NFR-P-01）。
 import type { Db } from '@/db/db';
 import { listAllPageIds } from '@/db/pageRepository';
-import { deletePageImages, listStoredPageIds } from '@/storage/pageImages';
+import {
+  clearImageOperationMark,
+  deletePageImages,
+  listStoredPageIds,
+  wasImageOperationInterrupted,
+} from '@/storage/pageImages';
 import { exportDirectory } from '@/storage/paths';
 
 import { startOcrQueue } from './ocrQueue';
 
 export async function runStartupMaintenance(db: Db): Promise<void> {
-  await removeOrphanPageImages(db);
+  // 画像フォルダの一覧は数千枚で数秒かかるため、前回が途中で終わったときだけ行う（ADR 0015）
+  if (wasImageOperationInterrupted()) {
+    await removeOrphanPageImages(db);
+    clearImageOperationMark();
+  }
   clearExportDirectory();
   await startOcrQueue(db);
 }

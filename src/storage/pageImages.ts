@@ -16,6 +16,7 @@ import { newPageId } from '@/native/randomId';
 
 import {
   ensureStorageDirectories,
+  imageOperationMarkerFile,
   pageIdFromFileName,
   pageImageFile,
   pageImagesDirectory,
@@ -123,4 +124,30 @@ export function discardCapturedImages(images: CapturedImage[]): void {
       console.warn(`一時画像を削除できませんでした: ${image.uri}`, error);
     }
   }
+}
+
+let runningImageOperationCount = 0;
+
+/**
+ * 画像ファイルと DB の両方を書き換える操作（保存・削除）を囲む。
+ * 実行中は印のファイルを残し、途中でアプリが終了したら次回起動時に整合性チェックが走るようにする。
+ * 印がなければ整合性チェックを省く（数千枚の画像フォルダの一覧に数秒かかるため。ADR 0015）
+ */
+export async function withImageOperation<T>(operation: () => Promise<T>): Promise<T> {
+  if (runningImageOperationCount++ === 0) imageOperationMarkerFile().write('');
+  try {
+    return await operation();
+  } finally {
+    if (--runningImageOperationCount === 0) clearImageOperationMark();
+  }
+}
+
+/** 前回の実行が、画像の保存・削除の途中で終わったか */
+export function wasImageOperationInterrupted(): boolean {
+  return imageOperationMarkerFile().exists;
+}
+
+export function clearImageOperationMark(): void {
+  const marker = imageOperationMarkerFile();
+  if (marker.exists) marker.delete();
 }

@@ -53,3 +53,4 @@ ADR は「なぜその方式を選んだか」「何を捨てたか」を判断�
 | [0012](0012-ios27-scene-lifecycle-plugin.md) | iOS 27 の UIScene 必須化に、独自の config plugin で対応する | 承認 |
 | [0013](0013-ocr-apple-vision-on-ios.md) | iOS の文字認識は Apple Vision、Android は ML Kit を使う | 承認 |
 | [0014](0014-ios27-appearance-bridge.md) | iOS 27 で外観（ライト/ダーク）の変更を React Native に届け直す | 承認 |
+| [0015](0015-integrity-check-only-after-interruption.md) | 画像フォルダの整合性チェックは、前回の画像操作が途中で終わったときだけ行う | 承認 |

@@ -17,7 +17,10 @@ async function createDbWithPage(pageId: string) {
   return db;
 }
 
-beforeEach(() => fakeFiles.clear());
+beforeEach(() => {
+  fakeFiles.clear();
+  mockStartOcrQueue.mockClear();
+});
 
 test('DB にないページの画像だけを消し、DB にあるページの画像は残す', async () => {
   const db = await createDbWithPage('kept');
@@ -37,11 +40,20 @@ test('画像のない DB 上のページは消さない', async () => {
   expect(row?.count).toBe(1);
 });
 
-test('runStartupMaintenance: 孤立画像と書き出しの残骸を消してから OCR キューを始める', async () => {
+test('runStartupMaintenance: 前回が途中で終わっていたら、孤立画像を消して印を消す', async () => {
   const db = await createDbWithPage('kept');
+  fakeFiles.add('doc/image-operation-in-progress');
   fakeFiles.add('doc/pages/orphan.jpg');
   fakeFiles.add('cache/export/old.pdf');
   await runStartupMaintenance(db);
   expect([...fakeFiles]).toEqual([]);
+  expect(mockStartOcrQueue).toHaveBeenCalledTimes(1);
+});
+
+test('runStartupMaintenance: 印がなければ画像フォルダを調べない（起動を遅くしないため。ADR 0015）', async () => {
+  const db = await createDbWithPage('kept');
+  fakeFiles.add('doc/pages/orphan.jpg');
+  await runStartupMaintenance(db);
+  expect([...fakeFiles]).toEqual(['doc/pages/orphan.jpg']);
   expect(mockStartOcrQueue).toHaveBeenCalledTimes(1);
 });

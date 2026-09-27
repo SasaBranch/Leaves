@@ -26,6 +26,8 @@ export type ColorTokens = {
   accentSoft: string;
   /** 紙（サムネイル・ページ背景）。ダークモードでも紙色のまま */
   paper: string;
+  /** 削除など取り消せない操作 */
+  danger: string;
 };
 
 export const darkColors: ColorTokens = {
@@ -41,6 +43,7 @@ export const darkColors: ColorTokens = {
   accentText: '#7EDDA5',
   accentSoft: 'rgba(95,208,142,0.16)',
   paper: '#F3F0E6',
+  danger: '#F2857D',
 };
 
 export const lightColors: ColorTokens = {
@@ -56,6 +59,7 @@ export const lightColors: ColorTokens = {
   accentText: '#1E7F48',
   accentSoft: '#DDF0E4',
   paper: '#FFFEFA',
+  danger: '#C0392B',
 };
 
 /** fontFamily に指定する名前。src/theme/fonts.ts で読み込むフォントと対応する */

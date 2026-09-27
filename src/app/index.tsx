@@ -1,50 +1,149 @@
+// SC-1 ライブラリ（基本設計書 4.3）
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ellipsis, Leaf, Search } from 'lucide-react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { CapturedImage } from '@/domain/types';
-import { pickImages } from '@/native/imagePicker';
-import { scanDocument } from '@/native/scanner';
+import type { SortOrder } from '@/domain/types';
+import { useCaptureLauncher } from '@/hooks/useCaptureLauncher';
+import { useLibrary } from '@/hooks/useLibrary';
 import { useTheme } from '@/theme/useTheme';
+import { ActionBar } from '@/ui/components/ActionBar';
+import { CoverGrid } from '@/ui/components/CoverGrid';
+import { NoteCover } from '@/ui/components/NoteCover';
+import { SortToggle } from '@/ui/components/SortToggle';
 
-// 仮のライブラリ画面（M2 で「スキャン → 保存 → 表示」を通すための最小版）。SC-1 は #23 で実装する
+/** 「最近のノート」の表紙の幅（横スクロール） */
+const RECENT_COVER_WIDTH = 112;
+/** 画面下のアクションバーに一覧の最後が隠れないための余白 */
+const ACTION_BAR_CLEARANCE = 120;
+
 export default function LibraryScreen() {
+  const [sort, setSort] = useState<SortOrder>('updatedAt');
+  const { data } = useLibrary(sort);
+  const { scan, importPhotos } = useCaptureLauncher({ notebookId: null });
   const { colors, fonts } = useTheme();
-
-  async function capture(getImages: () => Promise<CapturedImage[] | null>) {
-    const images = await getImages();
-    if (images) router.push({ pathname: '/capture', params: { images: JSON.stringify(images) } });
-  }
+  const isEmpty = data && data.notebooks.length === 0 && data.notes.length === 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.bg }]}>
-      <Text style={[styles.logo, { color: colors.text, fontFamily: fonts.logo }]}>Leaves</Text>
-      <Text style={[styles.caption, { color: colors.muted, fontFamily: fonts.regular }]}>
-        ノートを撮って、ノートブックに整理する
+    <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: colors.bg }]}>
+      <ScrollView contentContainerStyle={{ paddingBottom: ACTION_BAR_CLEARANCE }}>
+        <View style={styles.header}>
+          <View style={styles.logo}>
+            <Leaf size={26} color={colors.accentText} />
+            <Text style={[styles.logoText, { color: colors.text, fontFamily: fonts.logo }]}>
+              Leaves
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="その他"
+            style={styles.iconButton}
+          >
+            <Ellipsis size={22} color={colors.muted} />
+          </Pressable>
+        </View>
+
+        <Pressable
+          accessibilityRole="search"
+          onPress={() => router.push('/search')}
+          style={[styles.searchBar, { backgroundColor: colors.surface2 }]}
+        >
+          <Search size={18} color={colors.muted} />
+          <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 15 }}>
+            ノートを検索
+          </Text>
+        </Pressable>
+
+        {data && data.recentNotes.length > 0 ? (
+          <>
+            <SectionTitle title="最近のノート" />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recentRow}
+            >
+              {data.recentNotes.map((note) => (
+                <NoteCover
+                  key={note.id}
+                  note={note}
+                  width={RECENT_COVER_WIDTH}
+                  onPress={() => router.push({ pathname: '/note/[id]', params: { id: note.id } })}
+                />
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
+
+        <SectionTitle
+          title="ライブラリ"
+          accessory={<SortToggle sort={sort} onChange={setSort} />}
+        />
+        {isEmpty ? (
+          <Text style={[styles.empty, { color: colors.muted, fontFamily: fonts.regular }]}>
+            下の「スキャン」から最初のノートを作りましょう
+          </Text>
+        ) : (
+          <CoverGrid
+            notebooks={data?.notebooks ?? []}
+            notes={data?.notes ?? []}
+            columns={3}
+            columnGap={14}
+          />
+        )}
+      </ScrollView>
+      <ActionBar onScan={scan} onImport={importPhotos} />
+    </SafeAreaView>
+  );
+}
+
+function SectionTitle({ title, accessory }: { title: string; accessory?: React.ReactNode }) {
+  const { colors, fonts } = useTheme();
+  return (
+    <View style={styles.sectionTitle}>
+      <Text
+        accessibilityRole="header"
+        style={{ color: colors.text, fontFamily: fonts.bold, fontSize: 15 }}
+      >
+        {title}
       </Text>
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => capture(pickImages)}
-          style={[styles.button, { backgroundColor: colors.surface2 }]}
-        >
-          <Text style={{ color: colors.text, fontFamily: fonts.bold }}>写真から取り込み</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => capture(scanDocument)}
-          style={[styles.button, { backgroundColor: colors.accent }]}
-        >
-          <Text style={{ color: colors.onAccent, fontFamily: fonts.bold }}>スキャン</Text>
-        </Pressable>
-      </View>
+      {accessory}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  logo: { fontSize: 34 },
-  caption: { fontSize: 14 },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 32 },
-  button: { height: 52, paddingHorizontal: 22, borderRadius: 26, justifyContent: 'center' },
+  screen: { flex: 1 },
+  header: {
+    height: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 20,
+    paddingRight: 12,
+  },
+  logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  logoText: { fontSize: 27, letterSpacing: -0.5 },
+  iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  searchBar: {
+    marginTop: 14,
+    marginHorizontal: 20,
+    height: 44,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  sectionTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginTop: 26,
+    marginBottom: 12,
+  },
+  recentRow: { gap: 12, paddingHorizontal: 20 },
+  empty: { paddingHorizontal: 20, fontSize: 14 },
 });

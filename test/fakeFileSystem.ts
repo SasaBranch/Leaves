@@ -17,6 +17,11 @@ export class Directory {
     return [...fakeFiles].some((file) => file.startsWith(this.uri + '/'));
   }
   create() {}
+  delete() {
+    for (const file of [...fakeFiles]) {
+      if (file.startsWith(this.uri + '/')) fakeFiles.delete(file);
+    }
+  }
   list() {
     return [...fakeFiles]
       .filter((file) => file.startsWith(this.uri + '/'))

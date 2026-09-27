@@ -8,8 +8,6 @@ const PAGE_IMAGE_EXTENSION = '.jpg';
 
 export const pageImagesDirectory = () => new Directory(Paths.document, 'pages');
 export const thumbnailsDirectory = () => new Directory(Paths.document, 'thumbs');
-/** スキャン直後の一時画像。保存・破棄で削除する */
-export const captureDirectory = () => new Directory(Paths.cache, 'capture');
 /** 書き出し用の一時ファイル。共有後に削除する */
 export const exportDirectory = () => new Directory(Paths.cache, 'export');
 

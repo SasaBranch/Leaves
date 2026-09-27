@@ -1,15 +1,8 @@
-import type { Notebook, NotebookId } from '@/domain/types';
-
 import { asNotebookId, buildNote, buildPage } from '../../test/builders';
-import { createMigratedTestDb, insertNotebookRow, TEST_NOW } from '../../test/migratedTestDb';
+import { createMigratedTestDb, insertNotebookRow } from '../../test/migratedTestDb';
 import { insertNote } from './noteRepository';
 import { insertPage } from './pageRepository';
-import {
-  buildNotebookPath,
-  buildSnippet,
-  escapeLikePattern,
-  searchPages,
-} from './searchRepository';
+import { buildSnippet, escapeLikePattern, searchPages } from './searchRepository';
 
 const NEWER = '2026-09-29T00:00:00.000Z';
 
@@ -134,22 +127,4 @@ test('buildSnippet: 英字は大文字・小文字を区別せずに一致させ
     match: 'TODO',
     after: ' list',
   });
-});
-
-test('buildNotebookPath: ライブラリから順に名前を並べる', () => {
-  const notebook = (id: string, name: string, parentId: string | null): Notebook => ({
-    id: id as NotebookId,
-    parentId: parentId as NotebookId | null,
-    name,
-    color: '#2F5D45',
-    createdAt: TEST_NOW,
-    updatedAt: TEST_NOW,
-  });
-  const notebooks = [
-    notebook('a', '大学', null),
-    notebook('b', '線形代数', 'a'),
-    notebook('c', '演習', 'b'),
-  ];
-  expect(buildNotebookPath(asNotebookId('c'), notebooks)).toEqual(['大学', '線形代数', '演習']);
-  expect(buildNotebookPath(null, notebooks)).toEqual([]);
 });

@@ -2,6 +2,8 @@
 import { SEARCH_RESULT_LIMIT, SEARCH_SNIPPET_CONTEXT_CHARS } from '@/config';
 import type { Notebook, NoteId, NotebookId, PageId, SearchHit } from '@/domain/types';
 
+import { buildNotebookPath } from '@/domain/notebookPath';
+
 import type { Db } from './db';
 import { listAllNotebooks, listNotebookSubtreeIds } from './notebookRepository';
 
@@ -86,18 +88,6 @@ function toSearchHit(row: SearchRow, keyword: string, notebooks: Notebook[]): Se
     notebookPath: buildNotebookPath(row.notebook_id as NotebookId | null, notebooks),
     snippet: buildSnippet(row.ocr_text, keyword),
   };
-}
-
-/** ライブラリから見た所属ノートブックの名前の並び。例: ['大学', '線形代数'] */
-export function buildNotebookPath(notebookId: NotebookId | null, notebooks: Notebook[]): string[] {
-  const byId = new Map(notebooks.map((notebook) => [notebook.id, notebook]));
-  const path: string[] = [];
-  let current = notebookId ? byId.get(notebookId) : undefined;
-  while (current) {
-    path.unshift(current.name);
-    current = current.parentId ? byId.get(current.parentId) : undefined;
-  }
-  return path;
 }
 
 /**

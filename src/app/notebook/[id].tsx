@@ -7,10 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { NotebookId, SortOrder } from '@/domain/types';
 import { useCaptureLauncher } from '@/hooks/useCaptureLauncher';
+import { useItemMenus } from '@/hooks/useItemMenus';
 import { useNotebook } from '@/hooks/useNotebook';
 import { useTheme } from '@/theme/useTheme';
 import { ActionBar } from '@/ui/components/ActionBar';
 import { CoverGrid } from '@/ui/components/CoverGrid';
+import { NotebookSwatch } from '@/ui/components/NotebookSwatch';
 import { SortToggle } from '@/ui/components/SortToggle';
 import { formatListDate } from '@/ui/formatDate';
 
@@ -22,6 +24,7 @@ export default function NotebookScreen() {
   const [sort, setSort] = useState<SortOrder>('updatedAt');
   const { data } = useNotebook(notebookId, sort);
   const { scan, importPhotos } = useCaptureLauncher({ notebookId });
+  const { openNotebookMenu, openNoteMenu, menusElement } = useItemMenus();
   const { colors, fonts } = useTheme();
 
   if (!data) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
@@ -96,7 +99,7 @@ export default function NotebookScreen() {
                   { borderColor: colors.border, backgroundColor: colors.surface },
                 ]}
               >
-                <View style={[styles.chipCover, { backgroundColor: child.color }]} />
+                <NotebookSwatch color={child.color} />
                 <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 13 }}>
                   {child.name}
                 </Text>
@@ -111,9 +114,17 @@ export default function NotebookScreen() {
         <View style={styles.sortRow}>
           <SortToggle sort={sort} onChange={setSort} />
         </View>
-        <CoverGrid notebooks={[]} notes={notes} columns={2} columnGap={16} />
+        <CoverGrid
+          notebooks={[]}
+          notes={notes}
+          columns={2}
+          columnGap={16}
+          onNotebookLongPress={openNotebookMenu}
+          onNoteLongPress={openNoteMenu}
+        />
       </ScrollView>
       <ActionBar onScan={scan} onImport={importPhotos} />
+      {menusElement}
     </SafeAreaView>
   );
 }
@@ -152,6 +163,5 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
   },
-  chipCover: { width: 12, height: 16, borderRadius: 2 },
   sortRow: { paddingHorizontal: 20, marginTop: 24, marginBottom: 14 },
 });

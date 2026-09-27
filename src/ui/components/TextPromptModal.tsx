@@ -26,7 +26,7 @@ export function TextPromptModal({
   title: string;
   initialValue?: string;
   submitLabel: string;
-  /** 入力エラー（同名など）はこの中で表示し、成功したら閉じる */
+  /** 入力エラー（同名など）はこの中で表示して例外を投げる。例外なら閉じずに入力し直してもらう */
   onSubmit: (value: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -39,6 +39,8 @@ export function TextPromptModal({
     try {
       await onSubmit(value);
       onClose();
+    } catch {
+      // エラーの表示は onSubmit 側が行う。ここでは閉じずに入力し直してもらうだけ
     } finally {
       setIsSubmitting(false);
     }

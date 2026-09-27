@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves 詳細設計書 |
-| 版数 | 1.3 |
+| 版数 | 1.4 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
 | ステータス | 確定 |
@@ -18,6 +18,7 @@
 | 1.1 | 2026-09-28 | 画面の置き場所を `app/` から `src/app/` に変更（Expo SDK 57 のテンプレート構成に合わせる。#1） |
 | 1.2 | 2026-09-28 | 4.3 Db 型を ADR 0011（順番待ち・tx 引数・SqlDriver）に合わせて更新（#7） |
 | 1.3 | 2026-09-28 | 9.2 iOS の文字認識を Apple Vision に変更（ADR 0013） |
+| 1.4 | 2026-09-28 | 8 章 画面用フックを実装に合わせて更新（M3） |
 
 ---
 
@@ -480,8 +481,10 @@ export function subscribeDataChanged(listener: () => void): () => void; // 戻�
 | `useLibrary(sort)` | `{ recentNotes, notebooks, notes }` | SC-1 |
 | `useNotebook(id, sort)` | `{ notebook, parentName, childNotebooks, notes, pageCount }` | SC-2 |
 | `useNote(id)` | `{ note, pages, notebookPath }` | SC-5, SC-6 |
-| `useSearch(keyword, scope)` | `{ hits, isSearching }`（300ms デバウンス） | SC-7 |
-| `useNotebookTree()` | `{ roots: NotebookTreeNode[] }` | SC-8 |
+| `useSearch(keyword, scope)` / `useSearchScopes(scope)` | `{ hits, searchedKeyword, isSearching }` / 範囲チップ用のノートブック | SC-7 |
+| `useNotebookTree(movingNotebookId)` | `{ roots, unselectableIds }`（移動対象とその子孫は選べない） | SC-8 |
+| `useCaptureLauncher(target)` | `{ scan, importPhotos }`（新しいノートを作る／既存ノートにページを足す） | SC-1, SC-2, SC-5 |
+| `useItemMenus()` | 長押しメニュー・名前入力ダイアログを開く関数と、その描画要素 | SC-1, SC-2 |
 
 - すべてのフックは `subscribeDataChanged` を購読し、変更時に取り直す
 - 取得中は前回の値を表示し続ける（画面のちらつきを防ぐため）

@@ -1,12 +1,13 @@
 // SC-1 ライブラリ（基本設計書 4.3）
 import { router } from 'expo-router';
-import { Ellipsis, Leaf, Search } from 'lucide-react-native';
+import { FolderPlus, Leaf, Search } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import type { SortOrder } from '@/domain/types';
 import { useCaptureLauncher } from '@/hooks/useCaptureLauncher';
+import { useItemMenus } from '@/hooks/useItemMenus';
 import { useLibrary } from '@/hooks/useLibrary';
 import { useTheme } from '@/theme/useTheme';
 import { ActionBar } from '@/ui/components/ActionBar';
@@ -23,6 +24,7 @@ export default function LibraryScreen() {
   const [sort, setSort] = useState<SortOrder>('updatedAt');
   const { data } = useLibrary(sort);
   const { scan, importPhotos } = useCaptureLauncher({ notebookId: null });
+  const { openNotebookMenu, openNoteMenu, openCreateNotebook, menusElement } = useItemMenus();
   const { colors, fonts } = useTheme();
   const isEmpty = data && data.notebooks.length === 0 && data.notes.length === 0;
 
@@ -38,10 +40,11 @@ export default function LibraryScreen() {
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="その他"
+            accessibilityLabel="新しいノートブック"
+            onPress={() => openCreateNotebook(null)}
             style={styles.iconButton}
           >
-            <Ellipsis size={22} color={colors.muted} />
+            <FolderPlus size={22} color={colors.muted} />
           </Pressable>
         </View>
 
@@ -70,6 +73,7 @@ export default function LibraryScreen() {
                   note={note}
                   width={RECENT_COVER_WIDTH}
                   onPress={() => router.push({ pathname: '/note/[id]', params: { id: note.id } })}
+                  onLongPress={() => openNoteMenu(note)}
                 />
               ))}
             </ScrollView>
@@ -90,10 +94,13 @@ export default function LibraryScreen() {
             notes={data?.notes ?? []}
             columns={3}
             columnGap={14}
+            onNotebookLongPress={openNotebookMenu}
+            onNoteLongPress={openNoteMenu}
           />
         )}
       </ScrollView>
       <ActionBar onScan={scan} onImport={importPhotos} />
+      {menusElement}
     </SafeAreaView>
   );
 }

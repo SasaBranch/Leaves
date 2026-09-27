@@ -14,11 +14,15 @@ export function CoverGrid({
   notes,
   columns,
   columnGap,
+  onNotebookLongPress,
+  onNoteLongPress,
 }: {
   notebooks: NotebookSummary[];
   notes: NoteSummary[];
   columns: number;
   columnGap: number;
+  onNotebookLongPress: (notebook: NotebookSummary) => void;
+  onNoteLongPress: (note: NoteSummary) => void;
 }) {
   const { width } = useWindowDimensions();
   const itemWidth = (width - HORIZONTAL_PADDING * 2 - columnGap * (columns - 1)) / columns;
@@ -30,6 +34,7 @@ export function CoverGrid({
           notebook={notebook}
           width={itemWidth}
           onPress={() => router.push({ pathname: '/notebook/[id]', params: { id: notebook.id } })}
+          onLongPress={() => onNotebookLongPress(notebook)}
         />
       ))}
       {notes.map((note) => (
@@ -38,6 +43,7 @@ export function CoverGrid({
           note={note}
           width={itemWidth}
           onPress={() => router.push({ pathname: '/note/[id]', params: { id: note.id } })}
+          onLongPress={() => onNoteLongPress(note)}
         />
       ))}
     </View>

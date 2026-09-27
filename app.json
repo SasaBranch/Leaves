@@ -31,7 +31,23 @@
           "imageWidth": 76
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "./plugins/withSceneLifecycle",
+      [
+        "react-native-document-scanner-plugin",
+        {
+          "cameraPermission": "ノートを撮影して取り込むためにカメラを使用します"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "写真アプリの画像をノートとして取り込むために使用します",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

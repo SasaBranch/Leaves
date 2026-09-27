@@ -12,15 +12,13 @@ import { useItemMenus } from '@/hooks/useItemMenus';
 import { useLibrary } from '@/hooks/useLibrary';
 import { useDb } from '@/state/database';
 import { useTheme } from '@/theme/useTheme';
-import { ActionBar } from '@/ui/components/ActionBar';
+import { ACTION_BAR_CLEARANCE, ActionBar } from '@/ui/components/ActionBar';
 import { CoverGrid } from '@/ui/components/CoverGrid';
 import { NoteCover } from '@/ui/components/NoteCover';
 import { SortToggle } from '@/ui/components/SortToggle';
 
 /** 「最近のノート」の表紙の幅（横スクロール） */
 const RECENT_COVER_WIDTH = 112;
-/** 画面下のアクションバーに一覧の最後が隠れないための余白 */
-const ACTION_BAR_CLEARANCE = 120;
 
 export default function LibraryScreen() {
   const [sort, setSort] = useState<SortOrder>('updatedAt');

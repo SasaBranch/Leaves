@@ -28,6 +28,8 @@ export type ColorTokens = {
   paper: string;
   /** 削除など取り消せない操作 */
   danger: string;
+  /** ノートブック表紙の後ろに重なる紙の縁（奥 → 手前） */
+  pageEdges: readonly [string, string];
 };
 
 export const darkColors: ColorTokens = {
@@ -44,6 +46,7 @@ export const darkColors: ColorTokens = {
   accentSoft: 'rgba(95,208,142,0.16)',
   paper: '#F3F0E6',
   danger: '#F2857D',
+  pageEdges: ['#A9A69B', '#CFCBBF'],
 };
 
 export const lightColors: ColorTokens = {
@@ -60,6 +63,7 @@ export const lightColors: ColorTokens = {
   accentSoft: '#DDF0E4',
   paper: '#FFFEFA',
   danger: '#C0392B',
+  pageEdges: ['#D2D0C7', '#E4E2DA'],
 };
 
 /** fontFamily に指定する名前。src/theme/fonts.ts で読み込むフォントと対応する */

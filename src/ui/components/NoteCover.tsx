@@ -7,8 +7,7 @@ import { thumbnailFile } from '@/storage/paths';
 import { useTheme } from '@/theme/useTheme';
 import { formatListDate } from '@/ui/formatDate';
 
-/** 表紙の縦横比（紙のノートに近い 3:4） */
-const COVER_ASPECT_RATIO = 3 / 4;
+import { COVER_ASPECT_RATIO } from './coverShape';
 
 export function NoteCover({
   note,

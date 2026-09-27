@@ -5,7 +5,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NotebookSummary } from '@/domain/types';
 import { useTheme } from '@/theme/useTheme';
 
-const COVER_ASPECT_RATIO = 3 / 4;
+import { COVER_ASPECT_RATIO, NotebookSpine } from './coverShape';
+
+/** 背表紙の幅 */
+const COVER_SPINE_WIDTH = 9;
 /** 表紙の後ろに重ねる紙1枚あたりのずらし幅 */
 const STACKED_PAGE_OFFSET = 3;
 
@@ -20,10 +23,10 @@ export function NotebookCover({
   onPress: () => void;
   onLongPress?: () => void;
 }) {
-  const { colors, fonts, isDark } = useTheme();
+  const { colors, fonts } = useTheme();
   const coverWidth = width - STACKED_PAGE_OFFSET * 2;
   const coverHeight = width / COVER_ASPECT_RATIO;
-  const pageEdgeColors = isDark ? ['#A9A69B', '#CFCBBF'] : ['#D2D0C7', '#E4E2DA'];
+  const pageEdgeColors = colors.pageEdges;
   return (
     <Pressable
       accessibilityRole="button"
@@ -57,7 +60,7 @@ export function NotebookCover({
             { width: coverWidth, height: coverHeight - 6, backgroundColor: notebook.color },
           ]}
         >
-          <View style={styles.spine} />
+          <NotebookSpine width={COVER_SPINE_WIDTH} />
           <View style={styles.label}>
             <Text numberOfLines={1} style={[styles.labelText, { fontFamily: fonts.bold }]}>
               {notebook.name}
@@ -91,14 +94,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
-  },
-  spine: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 9,
-    backgroundColor: 'rgba(0,0,0,0.24)',
   },
   label: {
     position: 'absolute',

@@ -11,13 +11,14 @@ import { useItemMenus } from '@/hooks/useItemMenus';
 import { useLeaveWhenDeleted } from '@/hooks/useLeaveWhenDeleted';
 import { useNotebook } from '@/hooks/useNotebook';
 import { useTheme } from '@/theme/useTheme';
-import { ActionBar } from '@/ui/components/ActionBar';
+import { ACTION_BAR_CLEARANCE, ActionBar } from '@/ui/components/ActionBar';
 import { CoverGrid } from '@/ui/components/CoverGrid';
 import { NotebookSwatch } from '@/ui/components/NotebookSwatch';
 import { SortToggle } from '@/ui/components/SortToggle';
 import { formatListDate } from '@/ui/formatDate';
 
-const ACTION_BAR_CLEARANCE = 120;
+/** 見出しに出す表紙の幅 */
+const HEADER_COVER_WIDTH = 54;
 
 export default function NotebookScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -68,9 +69,7 @@ export default function NotebookScreen() {
 
       <ScrollView contentContainerStyle={{ paddingBottom: ACTION_BAR_CLEARANCE }}>
         <View style={styles.titleBlock}>
-          <View style={[styles.miniCover, { backgroundColor: notebook.color }]}>
-            <View style={styles.miniSpine} />
-          </View>
+          <NotebookSwatch color={notebook.color} width={HEADER_COVER_WIDTH} />
           <View style={styles.titleText}>
             <Text
               accessibilityRole="header"
@@ -146,15 +145,6 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row' },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   titleBlock: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 20, paddingTop: 14 },
-  miniCover: { width: 54, height: 72, borderRadius: 4, overflow: 'hidden' },
-  miniSpine: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 6,
-    backgroundColor: 'rgba(0,0,0,0.24)',
-  },
   titleText: { flex: 1, gap: 4 },
   chips: { gap: 8, paddingHorizontal: 20 },
   chip: {

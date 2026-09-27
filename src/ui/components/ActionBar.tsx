@@ -7,6 +7,14 @@ import { useTheme } from '@/theme/useTheme';
 
 /** 画面下端（ホームインジケータの上）からの距離 */
 const BOTTOM_MARGIN = 12;
+/** ボタンの高さ（52）＋カプセルの余白（6×2） */
+const CAPSULE_HEIGHT = 64;
+
+/** ホームインジケータの分の余裕（スクロール領域は下端の安全領域を含むため） */
+const HOME_INDICATOR_ALLOWANCE = 44;
+
+/** 一覧の最後がアクションバーに隠れないよう、スクロール領域の下に空ける余白 */
+export const ACTION_BAR_CLEARANCE = CAPSULE_HEIGHT + BOTTOM_MARGIN + HOME_INDICATOR_ALLOWANCE;
 
 export function ActionBar({ onScan, onImport }: { onScan: () => void; onImport: () => void }) {
   const { colors, fonts } = useTheme();

@@ -14,6 +14,7 @@ import {
   deleteNotebookWithContents,
   renameNotebook,
 } from '@/services/notebooks';
+import { shareExport } from '@/services/export/shareExport';
 import { deleteNote, renameNote } from '@/services/notes';
 import { useDb } from '@/state/database';
 import { ActionMenu, type ActionMenuItem } from '@/ui/components/ActionMenu';
@@ -103,6 +104,8 @@ export function useItemMenus(): {
           label: '移動',
           onPress: () => router.push({ pathname: '/move', params: { kind: 'note', id: note.id } }),
         },
+        { label: 'PDF で書き出し', onPress: () => exportNote(note, 'pdf') },
+        { label: 'Markdown で書き出し', onPress: () => exportNote(note, 'markdown') },
         {
           label: '削除',
           destructive: true,
@@ -118,6 +121,14 @@ export function useItemMenus(): {
         },
       ],
     });
+
+  async function exportNote(note: NoteSummary, format: 'pdf' | 'markdown') {
+    try {
+      await shareExport(db, format, note.id);
+    } catch (error) {
+      Alert.alert(isAppError(error) ? errorMessages[error.kind] : '書き出しに失敗しました');
+    }
+  }
 
   /** 中身の件数を示してから確認する（FR-F-05。ゴミ箱がないため） */
   async function confirmDeleteNotebook(notebook: Notebook) {

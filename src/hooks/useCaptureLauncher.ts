@@ -10,18 +10,27 @@ import { scanDocument } from '@/native/scanner';
 import { errorMessages } from '@/ui/errorMessages';
 
 export type CaptureTarget = { notebookId: NotebookId | null } | { noteId: NoteId };
+export type CaptureSource = 'scan' | 'photos';
 
 export function useCaptureLauncher(target: CaptureTarget) {
-  async function launch(getImages: () => Promise<CapturedImage[] | null>) {
-    try {
-      const images = await getImages();
-      if (!images) return; // キャンセル
-      router.push({ pathname: '/capture', params: toCaptureParams(images, target) });
-    } catch (error) {
-      showCaptureError(error);
-    }
+  async function launch(source: CaptureSource) {
+    const images = await captureImages(source);
+    if (images) router.push({ pathname: '/capture', params: toCaptureParams(images, target) });
   }
-  return { scan: () => launch(scanDocument), importPhotos: () => launch(pickImages) };
+  return { scan: () => launch('scan'), importPhotos: () => launch('photos') };
+}
+
+/**
+ * スキャナか写真アプリから画像を得る。キャンセル・エラーは null（エラーはここで利用者に伝える）。
+ * 保存画面の「追加で撮影」でも使う
+ */
+export async function captureImages(source: CaptureSource): Promise<CapturedImage[] | null> {
+  try {
+    return await (source === 'scan' ? scanDocument() : pickImages());
+  } catch (error) {
+    showCaptureError(error);
+    return null;
+  }
 }
 
 function toCaptureParams(images: CapturedImage[], target: CaptureTarget) {

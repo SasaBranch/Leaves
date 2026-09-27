@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NotebookId, SortOrder } from '@/domain/types';
 import { useCaptureLauncher } from '@/hooks/useCaptureLauncher';
 import { useItemMenus } from '@/hooks/useItemMenus';
+import { useLeaveWhenDeleted } from '@/hooks/useLeaveWhenDeleted';
 import { useNotebook } from '@/hooks/useNotebook';
 import { useTheme } from '@/theme/useTheme';
 import { ActionBar } from '@/ui/components/ActionBar';
@@ -23,6 +24,7 @@ export default function NotebookScreen() {
   const notebookId = id as NotebookId;
   const [sort, setSort] = useState<SortOrder>('updatedAt');
   const { data } = useNotebook(notebookId, sort);
+  useLeaveWhenDeleted(data);
   const { scan, importPhotos } = useCaptureLauncher({ notebookId });
   const { openNotebookMenu, openNoteMenu, menusElement } = useItemMenus();
   const { colors, fonts } = useTheme();
@@ -55,7 +57,8 @@ export default function NotebookScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="その他"
+            accessibilityLabel="このノートブックの操作"
+            onPress={() => openNotebookMenu(notebook)}
             style={styles.iconButton}
           >
             <Ellipsis size={22} color={colors.muted} />
@@ -94,6 +97,7 @@ export default function NotebookScreen() {
                 onPress={() =>
                   router.push({ pathname: '/notebook/[id]', params: { id: child.id } })
                 }
+                onLongPress={() => openNotebookMenu(child)}
                 style={[
                   styles.chip,
                   { borderColor: colors.border, backgroundColor: colors.surface },

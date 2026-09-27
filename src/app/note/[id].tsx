@@ -11,6 +11,7 @@ import {
   FileText,
   FolderInput,
   Share,
+  Trash2,
   Type,
 } from 'lucide-react-native';
 import { useRef, useState, type ReactNode } from 'react';
@@ -21,9 +22,10 @@ import { fitContainer, Gallery, type GalleryRefType } from 'react-native-zoom-to
 import { isAppError } from '@/domain/errors';
 import type { NoteId, Page } from '@/domain/types';
 import { useCaptureLauncher } from '@/hooks/useCaptureLauncher';
+import { useLeaveWhenDeleted } from '@/hooks/useLeaveWhenDeleted';
 import { useNote } from '@/hooks/useNote';
 import { shareExport, type ExportFormat } from '@/services/export/shareExport';
-import { renameNote } from '@/services/notes';
+import { deleteNote, renameNote } from '@/services/notes';
 import { retryOcr } from '@/services/ocrQueue';
 import { useDb } from '@/state/database';
 import { pageImageFile, thumbnailFile } from '@/storage/paths';
@@ -46,6 +48,7 @@ export default function NoteScreen() {
   const params = useLocalSearchParams<{ id: string; page?: string }>();
   const noteId = params.id as NoteId;
   const { data } = useNote(noteId);
+  useLeaveWhenDeleted(data);
   const [currentIndex, setCurrentIndex] = useState(() => Number(params.page ?? 0));
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -78,6 +81,14 @@ export default function NoteScreen() {
       Alert.alert(isAppError(error) ? errorMessages[error.kind] : '名前を変更できませんでした');
       throw error; // ダイアログを閉じずに入力し直してもらう
     }
+  }
+
+  /** 取り消せないため、消えるページ数を示して確認する（NFR-U-04） */
+  function confirmDelete() {
+    Alert.alert(`「${note.title}」を削除しますか？`, `${pages.length} ページが削除されます`, [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '削除', style: 'destructive', onPress: () => deleteNote(db, noteId) },
+    ]);
   }
 
   const menus: Record<Exclude<OpenMenu, null>, ActionMenuItem[]> = {
@@ -159,6 +170,9 @@ export default function NoteScreen() {
               }
             >
               <FolderInput size={22} color={colors.text} />
+            </ToolButton>
+            <ToolButton label="削除" onPress={confirmDelete} destructive>
+              <Trash2 size={22} color={colors.danger} />
             </ToolButton>
           </View>
           {currentPage ? (
@@ -330,17 +344,28 @@ function IconButton({
 function ToolButton({
   label,
   onPress,
+  destructive = false,
   children,
 }: {
   label: string;
   onPress: () => void;
+  /** 削除など取り消せない操作は色で区別する */
+  destructive?: boolean;
   children: ReactNode;
 }) {
   const { colors, fonts } = useTheme();
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.toolButton}>
       {children}
-      <Text style={{ color: colors.text, fontFamily: fonts.regular, fontSize: 11 }}>{label}</Text>
+      <Text
+        style={{
+          color: destructive ? colors.danger : colors.text,
+          fontFamily: fonts.regular,
+          fontSize: 11,
+        }}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }

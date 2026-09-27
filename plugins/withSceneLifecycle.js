@@ -1,9 +1,34 @@
 // iOS 27 SDK は UIScene ライフサイクルを必須にしたが、Expo SDK 57 の prebuild テンプレートはまだ対応していない。
 // Expo 同梱の ExpoAppSceneDelegate を使うように Info.plist と AppDelegate を書き換える（ADR 0012）。
-// テンプレートが対応したら、このプラグインは削除する。
+// あわせて、iOS 27 では React Native が外観（ライト/ダーク）の変更を受け取れないため、
+// シーンデリゲートで新しい API（registerForTraitChanges）から通知し直す（ADR 0014）。
+// テンプレートと React Native が対応したら、このプラグインは削除する。
 const { withAppDelegate, withInfoPlist } = require('expo/config-plugins');
 
-const SCENE_DELEGATE_CLASS = 'EXExpoAppSceneDelegate';
+// AppDelegate.swift に追加する SceneDelegate（Swift のクラス名はモジュール名つきで指定する）
+const SCENE_DELEGATE_CLASS = '$(PRODUCT_MODULE_NAME).SceneDelegate';
+
+const SCENE_DELEGATE_SOURCE = `
+// iOS 17 で非推奨になった traitCollectionDidChange が iOS 27 では呼ばれず、React Native の
+// Appearance に外観の変更が届かない。新しい API で変更を受け取り、React Native と同じ通知を送る（ADR 0014）
+class SceneDelegate: ExpoAppSceneDelegate {
+  override func scene(
+    _ scene: UIScene,
+    willConnectTo session: UISceneSession,
+    options connectionOptions: UIScene.ConnectionOptions
+  ) {
+    super.scene(scene, willConnectTo: session, options: connectionOptions)
+    guard #available(iOS 17.0, *), let window = window else { return }
+    window.registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (window: UIWindow, _: UITraitCollection) in
+      NotificationCenter.default.post(
+        name: .RCTUserInterfaceStyleDidChange,
+        object: window,
+        userInfo: [RCTUserInterfaceStyleDidChangeNotificationTraitCollectionKey: window.traitCollection]
+      )
+    }
+  }
+}
+`;
 
 function withSceneManifest(config) {
   return withInfoPlist(config, (plistConfig) => {
@@ -57,6 +82,9 @@ function withSceneAppDelegate(config) {
       alreadyApplied: (source) => !source.includes('factory.startReactNative('),
       description: 'ウィンドウ作成処理',
     });
+    if (!contents.includes('class SceneDelegate: ExpoAppSceneDelegate')) {
+      contents += SCENE_DELEGATE_SOURCE;
+    }
     delegateConfig.modResults.contents = contents;
     return delegateConfig;
   });

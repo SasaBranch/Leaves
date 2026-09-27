@@ -7,7 +7,6 @@ export type AppErrorKind =
   | 'invalidMove' // 自分自身・子孫への移動
   | 'storageFull' // 空き容量不足
   | 'cameraPermissionDenied'
-  | 'photoPermissionDenied'
   | 'exportFailed';
 
 export class AppError extends Error {

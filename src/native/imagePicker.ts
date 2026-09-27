@@ -1,5 +1,6 @@
 // 写真アプリからの画像選択（FR-S-05）。
-// iOS 14 以降・Android 13 以降は、選んだ写真だけをアプリに渡す OS の選択画面を使うため、写真全体へのアクセス許可は求めない
+// 選んだ写真だけをアプリに渡す OS の選択画面を使うため、写真全体へのアクセス許可は求めない
+// （そのため「写真の許可がない」エラーは起きない）
 import { launchImageLibraryAsync } from 'expo-image-picker';
 
 import type { CapturedImage } from '@/domain/types';

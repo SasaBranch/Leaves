@@ -1,9 +1,9 @@
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, type ErrorBoundaryProps } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import type { Db } from '@/db/db';
@@ -60,4 +60,30 @@ function useAppDatabase(): Db | null {
   return db;
 }
 
-const styles = StyleSheet.create({ root: { flex: 1 } });
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  errorScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20 },
+  retryButton: { minHeight: 48, paddingHorizontal: 28, borderRadius: 24, justifyContent: 'center' },
+});
+
+/** 予期しない例外を画面全体で受け止め、再読み込みできるようにする（基本設計書 7 章） */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  const { colors, fonts } = useTheme();
+  console.error(error);
+  return (
+    <View style={[styles.errorScreen, { backgroundColor: colors.bg }]}>
+      <Text style={{ color: colors.text, fontFamily: fonts.bold, fontSize: 17 }}>
+        問題が発生しました
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={retry}
+        style={[styles.retryButton, { backgroundColor: colors.accent }]}
+      >
+        <Text style={{ color: colors.onAccent, fontFamily: fonts.bold, fontSize: 16 }}>
+          再読み込み
+        </Text>
+      </Pressable>
+    </View>
+  );
+}

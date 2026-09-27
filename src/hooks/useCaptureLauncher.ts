@@ -33,7 +33,7 @@ function toCaptureParams(images: CapturedImage[], target: CaptureTarget) {
 
 /** 権限がないときは理由を伝え、設定アプリへ誘導する（FR-S-08） */
 function showCaptureError(error: unknown) {
-  if (isAppError(error, 'cameraPermissionDenied') || isAppError(error, 'photoPermissionDenied')) {
+  if (isAppError(error, 'cameraPermissionDenied')) {
     Alert.alert(errorMessages[error.kind], undefined, [
       { text: 'キャンセル', style: 'cancel' },
       { text: '設定を開く', onPress: () => Linking.openSettings() },

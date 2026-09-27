@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves 詳細設計書 |
-| 版数 | 1.1 |
+| 版数 | 1.2 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
 | ステータス | 確定 |
@@ -16,6 +16,7 @@
 | 0.1 | 2026-09-28 | 初版作成 |
 | 1.0 | 2026-09-28 | レビュー完了、確定 |
 | 1.1 | 2026-09-28 | 画面の置き場所を `app/` から `src/app/` に変更（Expo SDK 57 のテンプレート構成に合わせる。#1） |
+| 1.2 | 2026-09-28 | 4.3 Db 型を ADR 0011（順番待ち・tx 引数・SqlDriver）に合わせて更新（#7） |
 
 ---
 
@@ -151,7 +152,8 @@ src/
 │   └── types.ts                   … 型定義（5 章）
 ├── config.ts                      … 名前付き定数（11 章）
 ├── db/
-│   ├── db.ts                      … Db 型と expo-sqlite による実装
+│   ├── db.ts                      … Db 型・SqlDriver 型・createDb
+│   ├── expoSqliteDriver.ts        … アプリ用 SqlDriver（expo-sqlite）
 │   ├── migrations.ts              … スキーマ（追記のみ）
 │   ├── notebookRepository.ts
 │   ├── noteRepository.ts
@@ -212,20 +214,32 @@ flowchart TB
 - **画面が DB を更新するときは必ず services を通す**。読み取りは hooks からリポジトリを直接呼んでよい（読み取りのためだけに services を挟むのは、中身のない中継関数を増やすだけのため）
 - `src/native` と `src/storage` は互いに依存しない
 
-### 4.3 Db 型（ADR 0008）
+### 4.3 Db 型（ADR 0008 / 0011）
 
 ```ts
 export type SqlValue = string | number | null;
 
+// リポジトリが使う DB 操作
 export type Db = {
   run(sql: string, params?: SqlValue[]): Promise<void>;
   get<T>(sql: string, params?: SqlValue[]): Promise<T | null>;
   all<T>(sql: string, params?: SqlValue[]): Promise<T[]>;
-  transaction(work: () => Promise<void>): Promise<void>;
+  transaction(work: (tx: Db) => Promise<void>): Promise<void>; // 中の操作は tx で行う
 };
+
+// SQLite ライブラリごとの差を吸収する口
+export type SqlDriver = {
+  run(sql: string, params: SqlValue[]): Promise<void>;
+  get<T>(sql: string, params: SqlValue[]): Promise<T | null>;
+  all<T>(sql: string, params: SqlValue[]): Promise<T[]>;
+};
+
+export function createDb(driver: SqlDriver): Db;
 ```
 
-アプリ用の実装は `src/db/db.ts`（expo-sqlite の `runAsync` / `getFirstAsync` / `getAllAsync` / `withExclusiveTransactionAsync`）、テスト用は `test/testDb.ts`（better-sqlite3）に置く。4関数以上に広げない。
+- `createDb` は、すべての操作を1本の順番待ちに並べ、トランザクションを `BEGIN IMMEDIATE` / `COMMIT` / `ROLLBACK` で行う（ADR 0011）。アプリとテストで共通
+- `SqlDriver` の実装はアプリ用 `src/db/expoSqliteDriver.ts`（expo-sqlite）とテスト用 `test/testDb.ts`（better-sqlite3）の2つ
+- `Db` は4関数、`SqlDriver` は3関数から広げない
 
 ---
 

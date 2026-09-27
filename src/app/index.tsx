@@ -5,10 +5,12 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { confirmSeedTestData } from '@/dev/seedTestData';
 import type { SortOrder } from '@/domain/types';
 import { useCaptureLauncher } from '@/hooks/useCaptureLauncher';
 import { useItemMenus } from '@/hooks/useItemMenus';
 import { useLibrary } from '@/hooks/useLibrary';
+import { useDb } from '@/state/database';
 import { useTheme } from '@/theme/useTheme';
 import { ActionBar } from '@/ui/components/ActionBar';
 import { CoverGrid } from '@/ui/components/CoverGrid';
@@ -26,18 +28,23 @@ export default function LibraryScreen() {
   const { scan, importPhotos } = useCaptureLauncher({ notebookId: null });
   const { openNotebookMenu, openNoteMenu, openCreateNotebook, menusElement } = useItemMenus();
   const { colors, fonts } = useTheme();
+  const db = useDb();
   const isEmpty = data && data.notebooks.length === 0 && data.notes.length === 0;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: colors.bg }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: ACTION_BAR_CLEARANCE }}>
         <View style={styles.header}>
-          <View style={styles.logo}>
+          {/* 性能計測用のテストデータ生成は開発ビルドだけで使えるようにする（詳細設計書 12 章） */}
+          <Pressable
+            onLongPress={__DEV__ ? () => confirmSeedTestData(db) : undefined}
+            style={styles.logo}
+          >
             <Leaf size={26} color={colors.accentText} />
             <Text style={[styles.logoText, { color: colors.text, fontFamily: fonts.logo }]}>
               Leaves
             </Text>
-          </View>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="新しいノートブック"

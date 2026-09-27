@@ -26,6 +26,7 @@
 | 基本設計書 | [docs/02_basic-design](docs/02_basic-design) |
 | 詳細設計書 | [docs/03_detailed-design](docs/03_detailed-design) |
 | テスト | [docs/04_test](docs/04_test) |
+| 設計判断の記録（ADR） | [docs/adr](docs/adr) |
 
 ## ステータス
 

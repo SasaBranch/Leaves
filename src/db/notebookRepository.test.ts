@@ -1,6 +1,11 @@
 import type { Notebook, NotebookId } from '@/domain/types';
 
-import { createMigratedTestDb, insertNoteRow, TEST_NOW } from '../../test/migratedTestDb';
+import {
+  createMigratedTestDb,
+  insertNoteRow,
+  insertPageRow,
+  TEST_NOW,
+} from '../../test/migratedTestDb';
 import {
   countNotebookContents,
   deleteNotebookWithContents,
@@ -62,16 +67,17 @@ test('listChildNotebooks: ライブラリ直下を並び順どおりに返す', 
   expect(byName.map((n) => n.name)).toEqual(['仕事', '大学']);
 });
 
-test('listChildNotebooks: 直下のノート数を数える（孫のノートは数えない）', async () => {
+test('listChildNotebooks: ノート数は子孫のノートブックの分も含める（#37）', async () => {
   const db = await createTree();
   await insertNoteRow(db, { id: 'n1', notebookId: 'linear', title: '第1回' });
   await insertNoteRow(db, { id: 'n2', notebookId: 'linear', title: '第2回' });
   await insertNoteRow(db, { id: 'n3', notebookId: 'exercise', title: '問1' });
   const children = await listChildNotebooks(db, id('univ'), 'name');
-  const linear = children.find((n) => n.id === 'linear');
-  const english = children.find((n) => n.id === 'english');
-  expect(linear?.noteCount).toBe(2);
-  expect(english?.noteCount).toBe(0);
+  expect(children.find((n) => n.id === 'linear')?.noteCount).toBe(3);
+  expect(children.find((n) => n.id === 'english')?.noteCount).toBe(0);
+  const roots = await listChildNotebooks(db, null, 'name');
+  expect(roots.find((n) => n.id === 'univ')?.noteCount).toBe(3);
+  expect(roots.find((n) => n.id === 'work')?.noteCount).toBe(0);
 });
 
 test('listNotebookSubtreeIds: 自分自身と子孫すべてを返す', async () => {
@@ -86,7 +92,17 @@ test('countNotebookContents: 自分を除く子孫のノートブック数と、
   await insertNoteRow(db, { id: 'n1', notebookId: 'univ', title: 'ガイダンス' });
   await insertNoteRow(db, { id: 'n2', notebookId: 'exercise', title: '問1' });
   await insertNoteRow(db, { id: 'n3', notebookId: 'work', title: '会議' });
-  expect(await countNotebookContents(db, id('univ'))).toEqual({ notebooks: 3, notes: 2 });
+  expect(await countNotebookContents(db, id('univ'))).toEqual({ notebooks: 3, notes: 2, pages: 0 });
+});
+
+test('countNotebookContents: 子孫のノートのページ数も数える', async () => {
+  const db = await createTree();
+  await insertNoteRow(db, { id: 'n1', notebookId: 'univ', title: 'ガイダンス' });
+  await insertNoteRow(db, { id: 'n2', notebookId: 'exercise', title: '問1' });
+  await insertPageRow(db, { id: 'p1', noteId: 'n1', position: 0 });
+  await insertPageRow(db, { id: 'p2', noteId: 'n2', position: 0 });
+  await insertPageRow(db, { id: 'p3', noteId: 'n2', position: 1 });
+  expect(await countNotebookContents(db, id('univ'))).toEqual({ notebooks: 3, notes: 2, pages: 3 });
 });
 
 test('名前・色・親を更新すると updated_at も更新される', async () => {

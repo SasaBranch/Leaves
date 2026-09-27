@@ -1,5 +1,5 @@
 // SC-2 ノートブック用（詳細設計書 8 章）
-import { findNotebook, listChildNotebooks } from '@/db/notebookRepository';
+import { countNotebookContents, findNotebook, listChildNotebooks } from '@/db/notebookRepository';
 import { listNoteSummaries } from '@/db/noteRepository';
 import type { Notebook, NotebookId, NoteSummary, NotebookSummary, SortOrder } from '@/domain/types';
 
@@ -11,7 +11,9 @@ export type NotebookData = {
   parentName: string | null;
   childNotebooks: NotebookSummary[];
   notes: NoteSummary[];
-  pageCount: number;
+  /** 見出しに出す数。表紙と同じく子孫のノートブックの分も含める（#37） */
+  totalNoteCount: number;
+  totalPageCount: number;
 };
 
 export function useNotebook(id: NotebookId, sort: SortOrder) {
@@ -19,13 +21,14 @@ export function useNotebook(id: NotebookId, sort: SortOrder) {
     const notebook = await findNotebook(db, id);
     if (!notebook) return null; // 削除された直後など
     const parent = notebook.parentId ? await findNotebook(db, notebook.parentId) : null;
-    const notes = await listNoteSummaries(db, id, sort);
+    const contents = await countNotebookContents(db, id);
     return {
       notebook,
       parentName: parent?.name ?? null,
       childNotebooks: await listChildNotebooks(db, id, sort),
-      notes,
-      pageCount: notes.reduce((sum, note) => sum + note.pageCount, 0),
+      notes: await listNoteSummaries(db, id, sort),
+      totalNoteCount: contents.notes,
+      totalPageCount: contents.pages,
     };
   });
 }

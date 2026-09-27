@@ -61,20 +61,29 @@ export async function listAllNotebooks(db: Db): Promise<Notebook[]> {
   return rows.map(toNotebook);
 }
 
-/** parentId 直下のノートブックを、直下のノート数つきで返す。null はライブラリ直下 */
+/**
+ * parentId 直下のノートブックを、ノート数つきで返す。null はライブラリ直下。
+ * ノート数は子孫のノートブックの分も含める（子ノートブックにだけノートがあると「0 ノート」に見えてしまうため。#37）
+ */
 export async function listChildNotebooks(
   db: Db,
   parentId: NotebookId | null,
   sort: SortOrder,
 ): Promise<NotebookSummary[]> {
   const rows = await db.all<NotebookRow & { note_count: number }>(
-    `SELECT notebooks.*, count(notes.id) AS note_count
+    `WITH RECURSIVE subtree(root_id, id) AS (
+       SELECT id, id FROM notebooks WHERE parent_id IS ?
+       UNION ALL
+       SELECT subtree.root_id, notebooks.id
+       FROM notebooks JOIN subtree ON notebooks.parent_id = subtree.id
+     )
+     SELECT notebooks.*,
+            (SELECT count(*) FROM notes JOIN subtree ON notes.notebook_id = subtree.id
+             WHERE subtree.root_id = notebooks.id) AS note_count
      FROM notebooks
-     LEFT JOIN notes ON notes.notebook_id = notebooks.id
      WHERE notebooks.parent_id IS ?
-     GROUP BY notebooks.id
      ORDER BY ${ORDER_BY[sort]}`,
-    [parentId],
+    [parentId, parentId],
   );
   return rows.map((row) => ({ ...toNotebook(row), noteCount: row.note_count }));
 }
@@ -93,18 +102,20 @@ export async function listNotebookSubtreeIds(db: Db, id: NotebookId): Promise<No
   return rows.map((row) => row.id as NotebookId);
 }
 
-/** 削除確認で表示する、中に含まれるノートブック（自分自身を除く）とノートの数 */
+/** 中に含まれるノートブック（自分自身を除く）・ノート・ページの数。削除確認と見出しで使う */
 export async function countNotebookContents(
   db: Db,
   id: NotebookId,
-): Promise<{ notebooks: number; notes: number }> {
+): Promise<{ notebooks: number; notes: number; pages: number }> {
   const subtreeIds = await listNotebookSubtreeIds(db, id);
   const placeholders = subtreeIds.map(() => '?').join(', ');
-  const row = await db.get<{ notes: number }>(
-    `SELECT count(*) AS notes FROM notes WHERE notebook_id IN (${placeholders})`,
+  const row = await db.get<{ notes: number; pages: number }>(
+    `SELECT count(DISTINCT notes.id) AS notes, count(pages.id) AS pages
+     FROM notes LEFT JOIN pages ON pages.note_id = notes.id
+     WHERE notes.notebook_id IN (${placeholders})`,
     subtreeIds,
   );
-  return { notebooks: subtreeIds.length - 1, notes: row?.notes ?? 0 };
+  return { notebooks: subtreeIds.length - 1, notes: row?.notes ?? 0, pages: row?.pages ?? 0 };
 }
 
 export async function updateNotebookName(

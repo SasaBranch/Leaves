@@ -31,7 +31,7 @@ export default function NotebookScreen() {
   const { colors, fonts } = useTheme();
 
   if (!data) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
-  const { notebook, parentName, childNotebooks, notes, pageCount } = data;
+  const { notebook, parentName, childNotebooks, notes, totalNoteCount, totalPageCount } = data;
 
   return (
     <SafeAreaView edges={['top']} style={[styles.screen, { backgroundColor: colors.bg }]}>
@@ -78,7 +78,8 @@ export default function NotebookScreen() {
               {notebook.name}
             </Text>
             <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 13 }}>
-              {notes.length} ノート · {pageCount} ページ · {formatListDate(notebook.updatedAt)}更新
+              {totalNoteCount} ノート · {totalPageCount} ページ ·{' '}
+              {formatListDate(notebook.updatedAt)}更新
             </Text>
           </View>
         </View>

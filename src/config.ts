@@ -11,6 +11,12 @@ export const THUMBNAIL_MAX_EDGE_PX = 480;
 /** 一覧では画質より読み込み速度を優先する */
 export const THUMBNAIL_JPEG_QUALITY = 0.7;
 
+/**
+ * 1ページ保存するのに最低限必要な空き容量。ページ画像（最大約 1MB）とサムネイル、
+ * 変換途中の一時ファイルの分に余裕を持たせた値。これを下回ると保存を始めない
+ */
+export const REQUIRED_FREE_SPACE_PER_PAGE_BYTES = 5 * 1024 * 1024;
+
 /** ライブラリの「最近のノート」の件数 */
 export const RECENT_NOTES_LIMIT = 10;
 

@@ -37,3 +37,7 @@ yarn-error.*
 *.key
 *.mobileprovision
 *.pem
+
+# Spike outputs
+spikes/out/
+spikes/sample-page.jpg

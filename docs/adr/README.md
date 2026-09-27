@@ -48,3 +48,4 @@ ADR は「なぜその方式を選んだか」「何を捨てたか」を判断�
 | [0007](0007-notebook-ubiquitous-language.md) | フォルダの概念をコード上でも notebook と呼ぶ | 承認 |
 | [0008](0008-db-access-wrapper-for-tests.md) | DB アクセスを薄いラッパー経由にし、テストで差し替える | 承認 |
 | [0009](0009-spike-r1-trigram-confirmed.md) | 事前検証 R-1 の結果、trigram への LIKE 1本の検索を維持する | 承認 |
+| [0010](0010-spike-r2-pdf-confirmed.md) | 事前検証 R-2 の結果、pdf-lib による透明テキスト付き PDF を採用する | 承認 |

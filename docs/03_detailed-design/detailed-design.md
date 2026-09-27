@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves 詳細設計書 |
-| 版数 | 1.0 |
+| 版数 | 1.1 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
 | ステータス | 確定 |
@@ -15,6 +15,7 @@
 |---|---|---|
 | 0.1 | 2026-09-28 | 初版作成 |
 | 1.0 | 2026-09-28 | レビュー完了、確定 |
+| 1.1 | 2026-09-28 | 画面の置き場所を `app/` から `src/app/` に変更（Expo SDK 57 のテンプレート構成に合わせる。#1） |
 
 ---
 
@@ -136,17 +137,16 @@ MVP で作らないもの:
 ### 4.1 ディレクトリとファイルの責務
 
 ```
-app/                               … 画面（expo-router）。表示と操作の受け付けのみ
-├── _layout.tsx                    … フォント読み込み、テーマ、DB 初期化、起動時処理の開始
-├── index.tsx                      … SC-1 ライブラリ
-├── notebook/[id].tsx              … SC-2 ノートブック
-├── note/[id].tsx                  … SC-5 ノート表示
-├── note/[id]/reorder.tsx          … SC-6 ページ並べ替え
-├── capture.tsx                    … SC-4 スキャン保存
-├── search.tsx                     … SC-7 検索
-└── move.tsx                       … SC-8 移動先選択
-
 src/
+├── app/                           … 画面（expo-router）。表示と操作の受け付けのみ
+│   ├── _layout.tsx                … フォント読み込み、テーマ、DB 初期化、起動時処理の開始
+│   ├── index.tsx                  … SC-1 ライブラリ
+│   ├── notebook/[id].tsx          … SC-2 ノートブック
+│   ├── note/[id].tsx              … SC-5 ノート表示
+│   ├── note/[id]/reorder.tsx      … SC-6 ページ並べ替え
+│   ├── capture.tsx                … SC-4 スキャン保存
+│   ├── search.tsx                 … SC-7 検索
+│   └── move.tsx                   … SC-8 移動先選択
 ├── domain/
 │   └── types.ts                   … 型定義（5 章）
 ├── config.ts                      … 名前付き定数（11 章）
@@ -194,7 +194,7 @@ test/                              … テスト用の Db 実装、テストデ�
 
 ```mermaid
 flowchart TB
-  app["app/（画面）"] --> hooks["src/hooks"]
+  app["src/app（画面）"] --> hooks["src/hooks"]
   app --> services["src/services"]
   app --> ui["src/ui"]
   hooks --> repos["src/db/*Repository"]
@@ -594,7 +594,7 @@ export async function shareExport(format: ExportFormat, noteId: NoteId, options 
 
 **ファイル名**: `sanitizeFileName(title)` で `/ \ : * ? " < > |` を `_` に置き換え、前後の空白と末尾のピリオドを除く。空になったら `Leaves` とする。
 
-### 9.6 起動時処理（`app/_layout.tsx` → services）
+### 9.6 起動時処理（`src/app/_layout.tsx` → services）
 
 ```ts
 // 画面表示に必要なもの（ここまで終わるまでスプラッシュを表示）

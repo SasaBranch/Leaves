@@ -51,3 +51,4 @@ ADR は「なぜその方式を選んだか」「何を捨てたか」を判断�
 | [0010](0010-spike-r2-pdf-confirmed.md) | 事前検証 R-2 の結果、pdf-lib による透明テキスト付き PDF を採用する | 承認 |
 | [0011](0011-serialize-db-access.md) | DB へのアクセスを1本の順番待ちに並べ、トランザクションは引数の tx で行う | 承認 |
 | [0012](0012-ios27-scene-lifecycle-plugin.md) | iOS 27 の UIScene 必須化に、独自の config plugin で対応する | 承認 |
+| [0013](0013-ocr-apple-vision-on-ios.md) | iOS の文字認識は Apple Vision、Android は ML Kit を使う | 承認 |

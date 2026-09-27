@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves 詳細設計書 |
-| 版数 | 1.2 |
+| 版数 | 1.3 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
 | ステータス | 確定 |
@@ -17,6 +17,7 @@
 | 1.0 | 2026-09-28 | レビュー完了、確定 |
 | 1.1 | 2026-09-28 | 画面の置き場所を `app/` から `src/app/` に変更（Expo SDK 57 のテンプレート構成に合わせる。#1） |
 | 1.2 | 2026-09-28 | 4.3 Db 型を ADR 0011（順番待ち・tx 引数・SqlDriver）に合わせて更新（#7） |
+| 1.3 | 2026-09-28 | 9.2 iOS の文字認識を Apple Vision に変更（ADR 0013） |
 
 ---
 
@@ -538,7 +539,7 @@ export type RecognizedLine = { text: string; frame: { left: number; top: number;
 export function recognizeText(imageUri: string): Promise<{ text: string; lines: RecognizedLine[] }>;
 ```
 
-ML Kit の日本語認識器（`TextRecognitionScript.JAPANESE`）を使う。日本語認識器はラテン文字も認識する。
+iOS は Apple Vision（`modules/vision-text-recognizer`）、Android は ML Kit の日本語認識器（`TextRecognitionScript.JAPANESE`）を使う（ADR 0013）。どちらも行ごとの文字と位置（左上原点の px）で返す。
 
 ### 9.3 ノートブックの操作（`services/notebooks.ts`）
 

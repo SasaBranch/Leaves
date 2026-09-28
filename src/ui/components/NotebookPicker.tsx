@@ -9,7 +9,7 @@ import { flattenNotebookTree, type NotebookTreeRow } from '@/domain/notebookTree
 import type { NotebookId } from '@/domain/types';
 import { useNotebookTree } from '@/hooks/useNotebookTree';
 import { createNotebook } from '@/services/notebooks';
-import { useDb } from '@/state/database';
+import { useShelf } from '@/state/openShelf';
 import { useTheme } from '@/theme/useTheme';
 import { errorMessages } from '@/ui/errorMessages';
 
@@ -126,12 +126,12 @@ function NotebookRow({
 /** RN には共通の文字入力ダイアログがないため、行の中に入力欄を出す。作る場所はライブラリ直下 */
 function NewNotebookRow() {
   const [isEditing, setIsEditing] = useState(false);
-  const db = useDb();
+  const shelf = useShelf();
   const { colors, fonts } = useTheme();
 
   async function create(name: string) {
     try {
-      await createNotebook(db, name, null);
+      await createNotebook(shelf, name, null);
       setIsEditing(false);
     } catch (error) {
       Alert.alert(isAppError(error) ? errorMessages[error.kind] : '作成できませんでした');

@@ -1,9 +1,9 @@
-import { fakeFiles } from '../../../test/fakeFileSystem';
+import { File, Paths } from 'expo-file-system';
+
+import { resetNodeFileSystem } from '../../../test/nodeFileSystem';
 import { prepareExportFile, sanitizeFileName } from './fileName';
 
-jest.mock('expo-file-system', () => jest.requireActual('../../../test/fakeFileSystem'));
-
-beforeEach(() => fakeFiles.clear());
+beforeEach(() => resetNodeFileSystem());
 
 test('sanitizeFileName: ファイル名に使えない文字を _ に置き換える', () => {
   expect(sanitizeFileName('a/b\\c:d*e?f"g<h>i|j')).toBe('a_b_c_d_e_f_g_h_i_j');
@@ -26,8 +26,9 @@ test('sanitizeFileName: 空になったら既定の名前にする', () => {
 });
 
 test('prepareExportFile: 書き出し用フォルダのファイルを返し、同名の残骸は消す', () => {
-  fakeFiles.add('cache/export/ノート.pdf');
+  const leftover = new File(Paths.cache, 'export', 'ノート.pdf');
+  prepareExportFile('ノート.pdf').write('前回の残骸');
   const file = prepareExportFile('ノート.pdf');
-  expect(file.uri).toBe('cache/export/ノート.pdf');
-  expect(fakeFiles.size).toBe(0);
+  expect(file.uri).toBe(leftover.uri);
+  expect(file.exists).toBe(false);
 });

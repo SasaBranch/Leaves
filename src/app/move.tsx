@@ -7,7 +7,7 @@ import { isAppError } from '@/domain/errors';
 import type { NoteId, NotebookId } from '@/domain/types';
 import { moveNotebook } from '@/services/notebooks';
 import { moveNote } from '@/services/notes';
-import { useDb } from '@/state/database';
+import { useShelf } from '@/state/openShelf';
 import { useTheme } from '@/theme/useTheme';
 import { NotebookPicker, NotebookPickerHeader } from '@/ui/components/NotebookPicker';
 import { errorMessages } from '@/ui/errorMessages';
@@ -36,11 +36,11 @@ function useMoveTarget(): MoveTarget {
 
 /** 選んだ移動先へ移して閉じる。失敗したら理由を表示して、選び直せるように画面に残る */
 function useMoveTo(target: MoveTarget) {
-  const db = useDb();
+  const shelf = useShelf();
   return async (destinationId: NotebookId | null) => {
     try {
-      if (target.kind === 'note') await moveNote(db, target.id, destinationId);
-      else await moveNotebook(db, target.id, destinationId);
+      if (target.kind === 'note') await moveNote(shelf, target.id, destinationId);
+      else await moveNotebook(shelf, target.id, destinationId);
       router.back();
     } catch (error) {
       Alert.alert(isAppError(error) ? errorMessages[error.kind] : '移動できませんでした');

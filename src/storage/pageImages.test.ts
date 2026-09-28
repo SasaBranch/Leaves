@@ -1,88 +1,55 @@
-import { AppError } from '@/domain/errors';
-import type { CapturedImage } from '@/domain/types';
+import { Directory, File, Paths } from 'expo-file-system';
 
-import { fakeDisk, fakeFiles } from '../../test/fakeFileSystem';
+import { AppError } from '@/domain/errors';
+import type { CapturedImage, ShelfId } from '@/domain/types';
+
+import { fakeImageManipulator } from '../../test/fakeImageManipulator';
+import { fakeDisk, resetNodeFileSystem } from '../../test/nodeFileSystem';
 import {
-  clearImageOperationMark,
-  deletePageImages,
   discardCapturedImages,
-  listStoredPageIds,
+  importExternalImage,
+  renumberPageFiles,
   resizeToFitWithin,
   storePageImages,
-  wasImageOperationInterrupted,
-  withImageOperation,
 } from './pageImages';
+import { thumbnailFile } from './paths';
 
-jest.mock('expo-file-system', () => jest.requireActual('../../test/fakeFileSystem'));
-
-// jest.mock の中から参照できるのは mock で始まる名前だけのため、偽物の状態をまとめて持つ
-const mockState = {
-  nextId: 0,
-  resizeCalls: [] as unknown[],
-  failOnSave: null as number | null,
-  saveCount: 0,
-};
-
-jest.mock('@/native/randomId', () => ({ newPageId: () => `page${mockState.nextId++}` }));
-
-// 画像変換の偽物: 変換結果を一時ファイルとして「作り」、どの指定で変換されたかを記録する
-jest.mock('expo-image-manipulator', () => {
-  const { fakeFiles: mockFiles } = jest.requireActual('../../test/fakeFileSystem');
-  return {
-    SaveFormat: { JPEG: 'jpeg' },
-    ImageManipulator: {
-      manipulate: () => {
-        let size = { width: 3000, height: 4000 };
-        const context = {
-          resize: (spec: { width?: number; height?: number }) => {
-            mockState.resizeCalls.push(spec);
-            size = spec.height ? { width: (3000 * spec.height) / 4000, height: spec.height } : size;
-            return context;
-          },
-          renderAsync: async () => ({
-            saveAsync: async () => {
-              mockState.saveCount += 1;
-              if (mockState.failOnSave === mockState.saveCount) throw new Error('変換に失敗');
-              const uri = `cache/tmp${mockState.saveCount}.jpg`;
-              mockFiles.add(uri);
-              return { uri, ...size };
-            },
-          }),
-        };
-        return context;
-      },
-    },
-  };
+jest.mock('@/native/randomId', () => {
+  let count = 0;
+  return { newPageId: () => `page${count++}` };
 });
 
-const captured = (name: string): CapturedImage => ({
-  uri: `cache/capture/${name}`,
-  width: 3000,
-  height: 4000,
-});
+const SHELF_ID = 'shelf' as ShelfId;
+const NOW = '2026-09-28T00:00:00.000Z';
 
+let note: Directory;
 beforeEach(() => {
-  fakeFiles.clear();
-  fakeDisk.availableDiskSpace = 1024 * 1024 * 1024;
-  mockState.resizeCalls.length = 0;
-  mockState.failOnSave = null;
-  mockState.saveCount = 0;
-  mockState.nextId = 0;
+  resetNodeFileSystem();
+  fakeImageManipulator.reset();
+  note = new Directory(Paths.document, '本棚', 'ノート');
+  note.create({ intermediates: true });
 });
 
-test('ページ画像とサムネイルをページ ID のファイル名で保存し、サイズを返す', async () => {
-  const stored = await storePageImages([captured('a.jpg'), captured('b.jpg')]);
-  expect(stored).toEqual([
-    { id: 'page0', width: 1800, height: 2400 },
-    { id: 'page1', width: 1800, height: 2400 },
+function captured(name: string, content = name): CapturedImage {
+  const file = new File(Paths.cache, name);
+  file.write(content);
+  return { uri: file.uri, width: 3000, height: 4000 };
+}
+
+const namesIn = (directory: Directory) => directory.list().map((entry) => entry.name).sort();
+
+test('ページ画像を番号のファイル名で、サムネイルをページ ID で保存し、.leaves.json 用の情報を返す', async () => {
+  const pages = await storePageImages([captured('a'), captured('b')], note, 2, SHELF_ID, NOW);
+
+  expect(namesIn(note)).toEqual(['003.jpg', '004.jpg']);
+  expect(pages.map((page) => [page.file, page.width, page.height, page.ocrStatus])).toEqual([
+    ['003.jpg', 1800, 2400, 'pending'],
+    ['004.jpg', 1800, 2400, 'pending'],
   ]);
-  expect([...fakeFiles].sort()).toEqual([
-    'doc/pages/page0.jpg',
-    'doc/pages/page1.jpg',
-    'doc/thumbs/page0.jpg',
-    'doc/thumbs/page1.jpg',
-  ]);
-  expect(mockState.resizeCalls).toEqual([
+  expect(pages[0]?.size).toBeGreaterThan(0);
+  expect(pages.every((page) => thumbnailFile(SHELF_ID, page.id).exists)).toBe(true);
+  // 長辺 2400px（ページ画像）と 480px（サムネイル）に縮める
+  expect(fakeImageManipulator.resizeCalls).toEqual([
     { height: 2400 },
     { height: 480 },
     { height: 2400 },
@@ -91,72 +58,58 @@ test('ページ画像とサムネイルをページ ID のファイル名で保�
 });
 
 test('途中で失敗したら、それまでに保存したファイルを消して例外を投げる', async () => {
-  mockState.failOnSave = 4; // 2枚目のサムネイルで失敗
-  await expect(storePageImages([captured('a.jpg'), captured('b.jpg')])).rejects.toThrow(
-    '変換に失敗',
-  );
-  const remainingSavedImages = [...fakeFiles].filter((file) => file.startsWith('doc/'));
-  expect(remainingSavedImages).toEqual([]);
+  fakeImageManipulator.failOnSave = 3; // 2枚目のページ画像
+  await expect(
+    storePageImages([captured('a'), captured('b')], note, 0, SHELF_ID, NOW),
+  ).rejects.toThrow('変換に失敗');
+  expect(namesIn(note)).toEqual([]);
+  expect(thumbnailFile(SHELF_ID, 'page0' as never).exists).toBe(false);
 });
 
 test('空き容量が足りなければ、何も書かずに storageFull を投げる', async () => {
-  fakeDisk.availableDiskSpace = 1024;
-  await expect(storePageImages([captured('a.jpg')])).rejects.toEqual(new AppError('storageFull'));
-  expect(fakeFiles.size).toBe(0);
+  fakeDisk.availableDiskSpace = 0;
+  await expect(storePageImages([captured('a')], note, 0, SHELF_ID, NOW)).rejects.toThrow(
+    new AppError('storageFull'),
+  );
+  expect(namesIn(note)).toEqual([]);
+});
+
+test('外部で置かれた画像を JPEG にして取り込み、元のファイルを消す', async () => {
+  const source = new File(note, 'scan.png');
+  source.write('png');
+  const page = await importExternalImage(source, new File(note, '001.jpg'), SHELF_ID, NOW);
+  expect(namesIn(note)).toEqual(['001.jpg']);
+  expect(page.file).toBe('001.jpg');
+  expect(new File(note, '001.jpg').textSync()).toBe('png');
+});
+
+test('renumberPageFiles: 並びの順に 001.jpg … へ付け直す（名前がぶつかる入れ替えでも）', () => {
+  const files: [string, string][] = [
+    ['001.jpg', 'one'],
+    ['002.jpg', 'two'],
+    ['zz.jpg', 'three'],
+  ];
+  for (const [name, content] of files) new File(note, name).write(content);
+  expect(renumberPageFiles(note, ['002.jpg', 'zz.jpg', '001.jpg'])).toEqual([
+    '001.jpg',
+    '002.jpg',
+    '003.jpg',
+  ]);
+  expect(['001.jpg', '002.jpg', '003.jpg'].map((name) => new File(note, name).textSync())).toEqual([
+    'two',
+    'three',
+    'one',
+  ]);
 });
 
 test('resizeToFitWithin: 長辺だけを指定し、小さい画像は拡大しない', () => {
   expect(resizeToFitWithin({ width: 3000, height: 4000 }, 2400)).toEqual({ height: 2400 });
   expect(resizeToFitWithin({ width: 4000, height: 3000 }, 2400)).toEqual({ width: 2400 });
-  expect(resizeToFitWithin({ width: 1200, height: 1600 }, 2400)).toBeNull();
-  expect(resizeToFitWithin({ width: 2400, height: 2400 }, 2400)).toBeNull();
+  expect(resizeToFitWithin({ width: 1000, height: 800 }, 2400)).toBeNull();
 });
 
-test('listStoredPageIds と deletePageImages: 片方だけ残った画像も見つけて消せる', () => {
-  fakeFiles.add('doc/pages/p1.jpg');
-  fakeFiles.add('doc/thumbs/p1.jpg');
-  fakeFiles.add('doc/thumbs/p2.jpg'); // ページ画像のないサムネイル
-  fakeFiles.add('doc/pages/.DS_Store');
-  expect(listStoredPageIds().sort()).toEqual(['p1', 'p2']);
-  deletePageImages(['p1', 'p2'] as never);
-  expect([...fakeFiles]).toEqual(['doc/pages/.DS_Store']);
-});
-
-test('discardCapturedImages: 一時画像を消す', () => {
-  fakeFiles.add('cache/capture/a.jpg');
-  discardCapturedImages([captured('a.jpg')]);
-  expect(fakeFiles.size).toBe(0);
-});
-
-test('withImageOperation: 実行中は印を残し、終わったら（失敗しても）消す', async () => {
-  let markedDuringOperation = false;
-  await withImageOperation(async () => {
-    markedDuringOperation = wasImageOperationInterrupted();
-  });
-  expect(markedDuringOperation).toBe(true);
-  expect(wasImageOperationInterrupted()).toBe(false);
-
-  await expect(
-    withImageOperation(async () => {
-      throw new Error('失敗');
-    }),
-  ).rejects.toThrow('失敗');
-  expect(wasImageOperationInterrupted()).toBe(false);
-});
-
-test('withImageOperation: 重なって実行されたときは、最後の操作が終わるまで印を消さない', async () => {
-  let finishFirst = () => {};
-  const first = withImageOperation(() => new Promise<void>((resolve) => (finishFirst = resolve)));
-  await withImageOperation(async () => {});
-  expect(wasImageOperationInterrupted()).toBe(true);
-  finishFirst();
-  await first;
-  expect(wasImageOperationInterrupted()).toBe(false);
-});
-
-test('clearImageOperationMark: 前回の実行で残った印を消す', () => {
-  fakeFiles.add('doc/image-operation-in-progress');
-  expect(wasImageOperationInterrupted()).toBe(true);
-  clearImageOperationMark();
-  expect(wasImageOperationInterrupted()).toBe(false);
+test('discardCapturedImages: 一時画像を消す（ないものは無視する）', () => {
+  const image = captured('a');
+  discardCapturedImages([image, { uri: new File(Paths.cache, 'none').uri, width: 1, height: 1 }]);
+  expect(new File(image.uri).exists).toBe(false);
 });

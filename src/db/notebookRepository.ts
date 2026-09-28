@@ -118,6 +118,16 @@ export async function countNotebookContents(
   return { notebooks: subtreeIds.length - 1, notes: row?.notes ?? 0, pages: row?.pages ?? 0 };
 }
 
+/** 本棚全体のノートブック・ノートの数。本棚の削除確認で使う（FR-V-05） */
+export async function countNotebookContentsInShelf(
+  db: Db,
+): Promise<{ notebooks: number; notes: number }> {
+  const row = await db.get<{ notebooks: number; notes: number }>(
+    `SELECT (SELECT count(*) FROM notebooks) AS notebooks, (SELECT count(*) FROM notes) AS notes`,
+  );
+  return { notebooks: row?.notebooks ?? 0, notes: row?.notes ?? 0 };
+}
+
 export async function updateNotebookName(
   db: Db,
   id: NotebookId,

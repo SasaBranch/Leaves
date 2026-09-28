@@ -6,14 +6,14 @@ import { useState, type ReactNode } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { formatLocalDateTime } from '@/domain/dateTime';
+import { formatDefaultNoteTitle } from '@/domain/dateTime';
 import { isAppError } from '@/domain/errors';
-import { normalizeName } from '@/domain/name';
+import { validateName } from '@/domain/name';
 import type { CapturedImage, NoteId, NotebookId } from '@/domain/types';
 import { captureImages } from '@/hooks/useCaptureLauncher';
 import { useNotebookPath } from '@/hooks/useNotebookPath';
 import { addPagesToNote, createNoteFromCapture } from '@/services/capture';
-import { useDb } from '@/state/database';
+import { useShelf } from '@/state/openShelf';
 import { discardCapturedImages } from '@/storage/pageImages';
 import { useTheme } from '@/theme/useTheme';
 import { ActionMenu } from '@/ui/components/ActionMenu';
@@ -30,13 +30,13 @@ export default function CaptureScreen() {
   const params = useLocalSearchParams<{ images: string; notebookId?: string; noteId?: string }>();
   const addingToNoteId = (params.noteId || null) as NoteId | null;
   const [images, setImages] = useState(() => JSON.parse(params.images) as CapturedImage[]);
-  const [title, setTitle] = useState(() => formatLocalDateTime(new Date()));
+  const [title, setTitle] = useState(() => formatDefaultNoteTitle(new Date()));
   const [notebookId, setNotebookId] = useState((params.notebookId || null) as NotebookId | null);
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
   const { data: notebookPath } = useNotebookPath(notebookId);
-  const db = useDb();
+  const shelf = useShelf();
   const { colors, fonts } = useTheme();
 
   async function save() {
@@ -44,10 +44,10 @@ export default function CaptureScreen() {
     const startedAt = performance.now();
     try {
       if (addingToNoteId) {
-        await addPagesToNote(db, addingToNoteId, images);
+        await addPagesToNote(shelf, addingToNoteId, images);
         router.back();
       } else {
-        const noteId = await createNoteFromCapture(db, { images, title, notebookId });
+        const noteId = await createNoteFromCapture(shelf, { images, title, notebookId });
         router.replace({ pathname: '/note/[id]', params: { id: noteId } });
       }
     } catch (error) {
@@ -90,7 +90,7 @@ export default function CaptureScreen() {
 
   async function renameTitle(value: string) {
     try {
-      setTitle(normalizeName(value));
+      setTitle(validateName(value));
     } catch (error) {
       Alert.alert(isAppError(error) ? errorMessages[error.kind] : '名前を変更できませんでした');
       throw error; // ダイアログを閉じずに入力し直してもらう

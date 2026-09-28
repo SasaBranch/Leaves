@@ -1,5 +1,6 @@
 // DB アクセスの入口（ADR 0008 / 0011）。
 // リポジトリは Db だけを使い、expo-sqlite や better-sqlite3 を直接呼ばない。
+import { createSerialQueue } from '@/domain/serialQueue';
 
 export type SqlValue = string | number | null;
 
@@ -49,15 +50,5 @@ export function createDb(driver: SqlDriver): Db {
           throw error;
         }
       }),
-  };
-}
-
-/** 渡された処理を、前の処理が終わって（成功・失敗を問わず）から順に実行する */
-function createSerialQueue() {
-  let last: Promise<unknown> = Promise.resolve();
-  return function runExclusively<T>(task: () => Promise<T>): Promise<T> {
-    const result = last.then(task, task);
-    last = result.catch(() => undefined);
-    return result;
   };
 }

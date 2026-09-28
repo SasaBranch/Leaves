@@ -3,7 +3,9 @@
 
 export type AppErrorKind =
   | 'invalidName' // 名前が空
-  | 'duplicateName' // 同じ場所に同名
+  | 'invalidNameCharacters' // 使えない文字・先頭の .
+  | 'duplicateName' // 同じ場所に同名（ノートブック・ノートを合わせて）
+  | 'duplicateShelfName' // 同名の本棚
   | 'invalidMove' // 自分自身・子孫への移動
   | 'storageFull' // 空き容量不足
   | 'cameraPermissionDenied'

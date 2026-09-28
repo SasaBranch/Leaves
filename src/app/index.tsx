@@ -1,6 +1,6 @@
 // SC-1 ライブラリ（基本設計書 4.3）
 import { router } from 'expo-router';
-import { FolderPlus, Leaf, Search } from 'lucide-react-native';
+import { FolderPlus, Leaf, Search, Settings } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import type { SortOrder } from '@/domain/types';
 import { useCaptureLauncher } from '@/hooks/useCaptureLauncher';
 import { useItemMenus } from '@/hooks/useItemMenus';
 import { useLibrary } from '@/hooks/useLibrary';
-import { useDb } from '@/state/database';
+import { useShelf } from '@/state/openShelf';
 import { useTheme } from '@/theme/useTheme';
 import { ACTION_BAR_CLEARANCE, ActionBar } from '@/ui/components/ActionBar';
 import { CoverGrid } from '@/ui/components/CoverGrid';
@@ -26,7 +26,7 @@ export default function LibraryScreen() {
   const { scan, importPhotos } = useCaptureLauncher({ notebookId: null });
   const { openNotebookMenu, openNoteMenu, openCreateNotebook, menusElement } = useItemMenus();
   const { colors, fonts } = useTheme();
-  const db = useDb();
+  const shelf = useShelf();
   const isEmpty = data && data.notebooks.length === 0 && data.notes.length === 0;
 
   return (
@@ -35,7 +35,7 @@ export default function LibraryScreen() {
         <View style={styles.header}>
           {/* 性能計測用のテストデータ生成は開発ビルドだけで使えるようにする（詳細設計書 12 章） */}
           <Pressable
-            onLongPress={__DEV__ ? () => confirmSeedTestData(db) : undefined}
+            onLongPress={__DEV__ ? () => confirmSeedTestData(shelf) : undefined}
             style={styles.logo}
           >
             <Leaf size={26} color={colors.accentText} />
@@ -43,6 +43,7 @@ export default function LibraryScreen() {
               Leaves
             </Text>
           </Pressable>
+          <View style={styles.spacer} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="新しいノートブック"
@@ -50,6 +51,14 @@ export default function LibraryScreen() {
             style={styles.iconButton}
           >
             <FolderPlus size={22} color={colors.muted} />
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="設定"
+            onPress={() => router.push('/settings')}
+            style={styles.iconButton}
+          >
+            <Settings size={22} color={colors.muted} />
           </Pressable>
         </View>
 
@@ -85,8 +94,9 @@ export default function LibraryScreen() {
           </>
         ) : null}
 
+        {/* 一覧の見出しは開いている本棚の名前（FR-V-08） */}
         <SectionTitle
-          title="ライブラリ"
+          title={shelf.name}
           accessory={<SortToggle sort={sort} onChange={setSort} />}
         />
         {isEmpty ? (
@@ -131,10 +141,10 @@ const styles = StyleSheet.create({
     height: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingLeft: 20,
     paddingRight: 12,
   },
+  spacer: { flex: 1 },
   logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logoText: { fontSize: 27, letterSpacing: -0.5 },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },

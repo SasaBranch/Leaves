@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { SearchHit } from '@/domain/types';
+import { useShelf } from '@/state/openShelf';
 import { thumbnailFile } from '@/storage/paths';
 import { useTheme } from '@/theme/useTheme';
 
@@ -11,6 +12,7 @@ const THUMBNAIL_HEIGHT = 66;
 
 export function SearchResultRow({ hit, onPress }: { hit: SearchHit; onPress: () => void }) {
   const { colors, fonts } = useTheme();
+  const shelf = useShelf();
   const pageNumber = hit.pagePosition + 1;
   const path = hit.notebookPath.length > 0 ? hit.notebookPath.join(' › ') : 'ライブラリ';
   const { before, match, after } = hit.snippet;
@@ -24,7 +26,7 @@ export function SearchResultRow({ hit, onPress }: { hit: SearchHit; onPress: () 
     >
       <View style={[styles.thumbnail, { backgroundColor: colors.paper }]}>
         <Image
-          source={{ uri: thumbnailFile(hit.pageId).uri }}
+          source={{ uri: thumbnailFile(shelf.id, hit.pageId).uri }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           recyclingKey={hit.pageId}

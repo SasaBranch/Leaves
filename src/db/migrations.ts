@@ -61,6 +61,14 @@ const MIGRATIONS: readonly (readonly string[])[] = [
       WHERE page_id IN (SELECT id FROM pages WHERE note_id = new.id);
     END`,
   ],
+  // 2: 本棚フォルダを正本にする（詳細設計書 v2.0 6.2、ADR 0016・0020）
+  [
+    // 名前の重複はフォルダ（ファイルシステム）が防ぐ。外部で付けられた名前を走査で取り込めなくなるのを避けるため
+    `DROP INDEX notebooks_unique_name`,
+    // 前回の走査時のフォルダの更新日時（ミリ秒）。同じなら中身の確認を省く。NULL は未走査
+    `ALTER TABLE notebooks ADD COLUMN scanned_modified_at REAL`,
+    `ALTER TABLE notes ADD COLUMN scanned_modified_at REAL`,
+  ],
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.length;
@@ -73,10 +81,16 @@ export async function configureConnection(db: Db): Promise<void> {
   await db.get('PRAGMA journal_mode = WAL');
 }
 
-/** 未適用のマイグレーションを、1つずつトランザクションで適用する */
-export async function migrateDatabase(db: Db): Promise<void> {
+/**
+ * 未適用のマイグレーションを、1つずつトランザクションで適用する。
+ * targetVersion は v1.0 の DB を再現するテスト用（移行の元データ。詳細設計書 9.10）
+ */
+export async function migrateDatabase(
+  db: Db,
+  targetVersion: number = LATEST_SCHEMA_VERSION,
+): Promise<void> {
   const currentVersion = await readSchemaVersion(db);
-  for (let version = currentVersion + 1; version <= LATEST_SCHEMA_VERSION; version++) {
+  for (let version = currentVersion + 1; version <= targetVersion; version++) {
     const statements = MIGRATIONS[version - 1] ?? [];
     await db.transaction(async (tx) => {
       for (const statement of statements) {

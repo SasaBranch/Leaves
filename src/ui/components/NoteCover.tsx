@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { NoteSummary } from '@/domain/types';
+import { useShelf } from '@/state/openShelf';
 import { thumbnailFile } from '@/storage/paths';
 import { useTheme } from '@/theme/useTheme';
 import { formatListDate } from '@/ui/formatDate';
@@ -21,6 +22,7 @@ export function NoteCover({
   onLongPress?: () => void;
 }) {
   const { colors, fonts } = useTheme();
+  const shelf = useShelf();
   return (
     <Pressable
       accessibilityRole="button"
@@ -36,7 +38,7 @@ export function NoteCover({
         ]}
       >
         <Image
-          source={{ uri: thumbnailFile(note.coverPageId).uri }}
+          source={{ uri: thumbnailFile(shelf.id, note.coverPageId).uri }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           recyclingKey={note.coverPageId}

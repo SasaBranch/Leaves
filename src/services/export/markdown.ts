@@ -3,30 +3,30 @@
 import JSZip from 'jszip';
 
 import { formatLocalDateTime } from '@/domain/dateTime';
-import type { Db } from '@/db/db';
-import { findNote } from '@/db/noteRepository';
 import { listAllNotebooks } from '@/db/notebookRepository';
 import { listPagesOfNote } from '@/db/pageRepository';
 import { buildNotebookPath } from '@/domain/notebookPath';
 import type { Note, NoteId, Page } from '@/domain/types';
+import type { OpenShelf } from '@/state/openShelf';
 import { pageImageFile } from '@/storage/paths';
+
+import { getNoteWithDirectory } from '../folders';
 
 import { type ExportFile, prepareExportFile, sanitizeFileName } from './fileName';
 
 const ZIP_MIME_TYPE = 'application/zip';
 const NOTEBOOK_PATH_SEPARATOR = ' / ';
 
-export async function buildMarkdownZip(db: Db, noteId: NoteId): Promise<ExportFile> {
-  const note = await findNote(db, noteId);
-  if (!note) throw new Error(`書き出すノートが見つかりません: ${noteId}`);
-  const pages = await listPagesOfNote(db, noteId);
-  const notebookPath = buildNotebookPath(note.notebookId, await listAllNotebooks(db));
+export async function buildMarkdownZip(shelf: OpenShelf, noteId: NoteId): Promise<ExportFile> {
+  const { note, directory } = await getNoteWithDirectory(shelf, noteId);
+  const pages = await listPagesOfNote(shelf.db, noteId);
+  const notebookPath = buildNotebookPath(note.notebookId, await listAllNotebooks(shelf.db));
   const fileName = sanitizeFileName(note.title);
 
   const zip = new JSZip();
   zip.file(`${fileName}.md`, buildMarkdown(note, pages, notebookPath));
   for (const [index, page] of pages.entries()) {
-    zip.file(imagePathInZip(index + 1), await pageImageFile(page.id).bytes());
+    zip.file(imagePathInZip(index + 1), await pageImageFile(directory, page.position).bytes());
   }
 
   const file = prepareExportFile(`${fileName}.zip`);

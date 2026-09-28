@@ -1,19 +1,21 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { Directory, File, Paths } from 'expo-file-system';
+
 import { NOTEBOOK_COLORS } from '@/config';
-import type { Db } from '@/db/db';
 import { findNotebook, listAllNotebooks } from '@/db/notebookRepository';
 import { findNote } from '@/db/noteRepository';
-import { findPage } from '@/db/pageRepository';
+import { findPage, listPageIdsOfNote } from '@/db/pageRepository';
 import type { AppErrorKind } from '@/domain/errors';
-import type { NotebookId } from '@/domain/types';
+import type { CapturedImage, NotebookId, NoteId, PageId } from '@/domain/types';
+import type { OpenShelf } from '@/state/openShelf';
+import { readManifest } from '@/storage/manifest';
+import { thumbnailFile } from '@/storage/paths';
 
-import { asNoteId, asNotebookId, asPageId } from '../../test/builders';
-import {
-  createMigratedTestDb,
-  insertNotebookRow,
-  insertNoteRow,
-  insertPageRow,
-  TEST_NOW,
-} from '../../test/migratedTestDb';
+import { nodePathOf } from '../../test/nodeFileSystem';
+import { createTestShelf } from '../../test/testShelf';
+import { createNoteFromCapture } from './capture';
 import {
   changeNotebookColor,
   createNotebook,
@@ -22,177 +24,301 @@ import {
   renameNotebook,
 } from './notebooks';
 
-const mockDeletedImages: string[][] = [];
-jest.mock('@/storage/pageImages', () => ({
-  deletePageImages: (ids: string[]) => mockDeletedImages.push(ids),
-  withImageOperation: (operation: () => Promise<unknown>) => operation(),
+let mockIdCount = 0;
+jest.mock('@/native/randomId', () => ({
+  newNotebookId: () => `notebook-${++mockIdCount}`,
+  newNoteId: () => `note-${++mockIdCount}`,
+  newPageId: () => `page-${++mockIdCount}`,
 }));
-let mockNotebookCount = 0;
-jest.mock('@/native/randomId', () => ({ newNotebookId: () => `new${mockNotebookCount++}` }));
+jest.mock('./ocrQueue', () => ({ enqueueOcr: jest.fn() }));
 const mockNotify = jest.fn();
 jest.mock('@/state/dataChanges', () => ({ notifyDataChanged: () => mockNotify() }));
 
-beforeEach(() => {
-  mockDeletedImages.length = 0;
-  mockNotebookCount = 0;
+let shelf: OpenShelf;
+/** 大学 > 線形代数 > 演習、と ライブラリ直下の 趣味 */
+let tree: { univ: NotebookId; linear: NotebookId; exercise: NotebookId; hobby: NotebookId };
+
+beforeEach(async () => {
+  mockIdCount = 0;
+  shelf = await createTestShelf();
+  const univ = await createNotebook(shelf, '大学', null);
+  const linear = await createNotebook(shelf, '線形代数', univ);
+  const exercise = await createNotebook(shelf, '演習', linear);
+  const hobby = await createNotebook(shelf, '趣味', null);
+  tree = { univ, linear, exercise, hobby };
   mockNotify.mockClear();
 });
 
-/** 大学 > 線形代数 > 演習、と ライブラリ直下の 趣味 */
-async function createTreeDb(): Promise<Db> {
-  const db = await createMigratedTestDb();
-  await insertNotebookRow(db, { id: 'univ', name: '大学' });
-  await insertNotebookRow(db, { id: 'linear', parentId: 'univ', name: '線形代数' });
-  await insertNotebookRow(db, { id: 'exercise', parentId: 'linear', name: '演習' });
-  await insertNotebookRow(db, { id: 'hobby', name: '趣味' });
-  return db;
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+// ---- 道具 ----
+
+const shelfPath = (...parts: string[]) => path.join(nodePathOf(shelf.directory.uri), ...parts);
+const entriesOf = (...parts: string[]) => fs.readdirSync(shelfPath(...parts)).sort();
+const manifestOf = (...parts: string[]) => readManifest(new Directory(shelf.directory, ...parts));
+
+/** 準備で作ったものより後の日時にする（更新日時が進んだことを確かめるため） */
+function advanceClock(): void {
+  jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'queueMicrotask'] });
+  jest.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
 }
 
-async function expectAppError(promise: Promise<unknown>, kind: AppErrorKind): Promise<void> {
-  await expect(promise).rejects.toMatchObject({ name: 'AppError', kind });
+async function captureNote(
+  title: string,
+  notebookId: NotebookId | null,
+): Promise<{ noteId: NoteId; pageIds: PageId[] }> {
+  const file = new File(Paths.cache, `${title}.jpg`);
+  file.write(title);
+  const images: CapturedImage[] = [{ uri: file.uri, width: 3000, height: 4000 }];
+  const noteId = await createNoteFromCapture(shelf, { images, title, notebookId });
+  return { noteId, pageIds: await listPageIdsOfNote(shelf.db, noteId) };
+}
+
+/** 失敗したら、フォルダも DB も変わらず通知もしない */
+async function expectRejectedWithoutChange(
+  operation: () => Promise<unknown>,
+  kind: AppErrorKind,
+): Promise<void> {
+  const foldersBefore = fs.readdirSync(shelfPath(), { recursive: true }).sort();
+  const notebooksBefore = await listAllNotebooks(shelf.db);
+  await expect(operation()).rejects.toMatchObject({ name: 'AppError', kind });
+  expect(fs.readdirSync(shelfPath(), { recursive: true }).sort()).toEqual(foldersBefore);
+  expect(await listAllNotebooks(shelf.db)).toEqual(notebooksBefore);
   expect(mockNotify).not.toHaveBeenCalled();
 }
 
+// ---- テスト ----
+
 describe('createNotebook', () => {
-  test('前後の空白を除いた名前で作成し、通知する', async () => {
-    const db = await createTreeDb();
+  test('前後の空白を除いた名前でフォルダと .leaves.json を作ってから DB に登録し、通知する', async () => {
+    const id = await createNotebook(shelf, '  統計学 ', tree.univ);
 
-    const id = await createNotebook(db, '  統計学 ', asNotebookId('univ'));
-
-    expect(await findNotebook(db, id)).toMatchObject({ name: '統計学', parentId: 'univ' });
+    const notebook = await findNotebook(shelf.db, id);
+    expect(notebook).toMatchObject({ name: '統計学', parentId: tree.univ });
+    expect(entriesOf('大学')).toEqual(['.leaves.json', '統計学', '線形代数']);
+    expect(manifestOf('大学', '統計学')).toMatchObject({
+      kind: 'notebook',
+      id,
+      color: notebook?.color,
+    });
     expect(mockNotify).toHaveBeenCalledTimes(1);
   });
 
   test('表紙色は同じ親の下のノートブック数で順番に割り当て、一巡したら先頭に戻る', async () => {
-    const db = await createMigratedTestDb();
+    shelf = await createTestShelf();
 
     const ids: NotebookId[] = [];
     for (let i = 0; i <= NOTEBOOK_COLORS.length; i++) {
-      ids.push(await createNotebook(db, `ノートブック${i}`, null));
+      ids.push(await createNotebook(shelf, `ノートブック${i}`, null));
     }
-    const childId = await createNotebook(db, '子', ids[0]!);
+    const childId = await createNotebook(shelf, '子', ids[0]!);
 
-    const colors = await Promise.all(ids.map(async (id) => (await findNotebook(db, id))?.color));
+    const colors = await Promise.all(
+      ids.map(async (id) => (await findNotebook(shelf.db, id))?.color),
+    );
     expect(colors).toEqual([...NOTEBOOK_COLORS, NOTEBOOK_COLORS[0]]);
-    expect((await findNotebook(db, childId))?.color).toBe(NOTEBOOK_COLORS[0]);
+    expect((await findNotebook(shelf.db, childId))?.color).toBe(NOTEBOOK_COLORS[0]);
+    expect(manifestOf('ノートブック1')).toMatchObject({ color: NOTEBOOK_COLORS[1] });
+    expect(manifestOf('ノートブック0', '子')).toMatchObject({ color: NOTEBOOK_COLORS[0] });
   });
 
   test.each(['', '   '])('名前が「%s」なら invalidName', async (name) => {
-    const db = await createTreeDb();
-    await expectAppError(createNotebook(db, name, null), 'invalidName');
+    await expectRejectedWithoutChange(() => createNotebook(shelf, name, null), 'invalidName');
   });
 
+  test.each(['a/b', '時刻 10:30', '.hidden'])(
+    '名前が「%s」なら invalidNameCharacters',
+    async (name) => {
+      await expectRejectedWithoutChange(
+        () => createNotebook(shelf, name, null),
+        'invalidNameCharacters',
+      );
+    },
+  );
+
   test('ライブラリ直下に同名があれば duplicateName', async () => {
-    const db = await createTreeDb();
-    await expectAppError(createNotebook(db, ' 趣味 ', null), 'duplicateName');
+    await expectRejectedWithoutChange(() => createNotebook(shelf, ' 趣味 ', null), 'duplicateName');
+  });
+
+  test('同じ場所に同名のノートのフォルダがあっても duplicateName', async () => {
+    await captureNote('講義', tree.univ);
+    mockNotify.mockClear();
+    await expectRejectedWithoutChange(
+      () => createNotebook(shelf, '講義', tree.univ),
+      'duplicateName',
+    );
+  });
+
+  test('大文字・小文字だけが違う名前も duplicateName', async () => {
+    await createNotebook(shelf, 'Math', null);
+    mockNotify.mockClear();
+    await expectRejectedWithoutChange(() => createNotebook(shelf, 'math', null), 'duplicateName');
   });
 
   test('同じ親の下に同名があれば duplicateName。別の親の下なら作成できる', async () => {
-    const db = await createTreeDb();
-    await expectAppError(createNotebook(db, '線形代数', asNotebookId('univ')), 'duplicateName');
+    await expectRejectedWithoutChange(
+      () => createNotebook(shelf, '線形代数', tree.univ),
+      'duplicateName',
+    );
 
-    await createNotebook(db, '線形代数', null);
-    expect(await listAllNotebooks(db)).toHaveLength(5);
+    await createNotebook(shelf, '線形代数', null);
+    expect(await listAllNotebooks(shelf.db)).toHaveLength(5);
+    expect(entriesOf()).toEqual(['.leaves.json', '大学', '線形代数', '趣味']);
   });
 });
 
 describe('renameNotebook', () => {
-  test('前後の空白を除いた名前に変え、更新日時を進めて通知する', async () => {
-    const db = await createTreeDb();
+  test('フォルダの名前を変えてから DB を変え、更新日時を進めて通知する', async () => {
+    advanceClock();
 
-    await renameNotebook(db, asNotebookId('linear'), ' 線形代数 I ');
+    await renameNotebook(shelf, tree.linear, ' 線形代数 I ');
 
-    const notebook = await findNotebook(db, asNotebookId('linear'));
+    const notebook = await findNotebook(shelf.db, tree.linear);
     expect(notebook).toMatchObject({ name: '線形代数 I' });
-    expect(notebook?.updatedAt).not.toBe(TEST_NOW);
+    expect(notebook?.updatedAt).toBe('2030-01-01T00:00:00.000Z');
+    expect(entriesOf('大学')).toEqual(['.leaves.json', '線形代数 I']);
+    // 中身ごと付いてくる
+    expect(entriesOf('大学', '線形代数 I')).toEqual(['.leaves.json', '演習']);
+    expect(manifestOf('大学', '線形代数 I')).toMatchObject({ kind: 'notebook', id: tree.linear });
     expect(mockNotify).toHaveBeenCalledTimes(1);
   });
 
-  test('空白だけの名前なら invalidName', async () => {
-    const db = await createTreeDb();
-    await expectAppError(renameNotebook(db, asNotebookId('linear'), ' '), 'invalidName');
+  test('大文字・小文字だけの変更はできる', async () => {
+    const id = await createNotebook(shelf, 'math', null);
+
+    await renameNotebook(shelf, id, 'Math');
+
+    expect((await findNotebook(shelf.db, id))?.name).toBe('Math');
+    expect(entriesOf()).toContain('Math');
+    expect(entriesOf()).not.toContain('math');
   });
 
-  test('同じ親の下に同名があれば duplicateName', async () => {
-    const db = await createTreeDb();
-    await expectAppError(renameNotebook(db, asNotebookId('hobby'), '大学'), 'duplicateName');
-    expect((await findNotebook(db, asNotebookId('hobby')))?.name).toBe('趣味');
+  test('空白だけの名前なら invalidName', async () => {
+    await expectRejectedWithoutChange(() => renameNotebook(shelf, tree.linear, ' '), 'invalidName');
+  });
+
+  test('使えない文字を含む名前なら invalidNameCharacters', async () => {
+    await expectRejectedWithoutChange(
+      () => renameNotebook(shelf, tree.linear, '線形/代数'),
+      'invalidNameCharacters',
+    );
+  });
+
+  test('同じ親の下に同名（大文字・小文字の違いを含む）があれば duplicateName', async () => {
+    await expectRejectedWithoutChange(
+      () => renameNotebook(shelf, tree.hobby, '大学'),
+      'duplicateName',
+    );
+    const other = await createNotebook(shelf, 'Math', null);
+    mockNotify.mockClear();
+    await expectRejectedWithoutChange(
+      () => renameNotebook(shelf, tree.hobby, 'MATH'),
+      'duplicateName',
+    );
+    expect((await findNotebook(shelf.db, other))?.name).toBe('Math');
+  });
+
+  test('同じ親の下に同名のノートがあれば duplicateName', async () => {
+    await captureNote('講義', null);
+    mockNotify.mockClear();
+    await expectRejectedWithoutChange(
+      () => renameNotebook(shelf, tree.hobby, '講義'),
+      'duplicateName',
+    );
   });
 });
 
-test('changeNotebookColor: 色を変えて通知する', async () => {
-  const db = await createTreeDb();
+test('changeNotebookColor: .leaves.json と DB の色を変えて通知する', async () => {
+  await changeNotebookColor(shelf, tree.hobby, NOTEBOOK_COLORS[5]);
 
-  await changeNotebookColor(db, asNotebookId('hobby'), NOTEBOOK_COLORS[5]);
-
-  expect((await findNotebook(db, asNotebookId('hobby')))?.color).toBe(NOTEBOOK_COLORS[5]);
+  expect((await findNotebook(shelf.db, tree.hobby))?.color).toBe(NOTEBOOK_COLORS[5]);
+  expect(manifestOf('趣味')).toMatchObject({
+    kind: 'notebook',
+    id: tree.hobby,
+    color: NOTEBOOK_COLORS[5],
+  });
   expect(mockNotify).toHaveBeenCalledTimes(1);
 });
 
 describe('moveNotebook', () => {
-  test('別のノートブックの下へ移動して通知する', async () => {
-    const db = await createTreeDb();
+  test('別のノートブックの下へ、中身ごとフォルダを移してから DB を変え、通知する', async () => {
+    await moveNotebook(shelf, tree.linear, tree.hobby);
 
-    await moveNotebook(db, asNotebookId('linear'), asNotebookId('hobby'));
-
-    expect((await findNotebook(db, asNotebookId('linear')))?.parentId).toBe('hobby');
+    expect((await findNotebook(shelf.db, tree.linear))?.parentId).toBe(tree.hobby);
+    expect(entriesOf('大学')).toEqual(['.leaves.json']);
+    expect(entriesOf('趣味', '線形代数')).toEqual(['.leaves.json', '演習']);
     expect(mockNotify).toHaveBeenCalledTimes(1);
   });
 
   test('ライブラリ直下へ移動できる', async () => {
-    const db = await createTreeDb();
+    await moveNotebook(shelf, tree.exercise, null);
 
-    await moveNotebook(db, asNotebookId('exercise'), null);
-
-    expect((await findNotebook(db, asNotebookId('exercise')))?.parentId).toBeNull();
+    expect((await findNotebook(shelf.db, tree.exercise))?.parentId).toBeNull();
+    expect(entriesOf()).toEqual(['.leaves.json', '大学', '演習', '趣味']);
+    expect(entriesOf('大学', '線形代数')).toEqual(['.leaves.json']);
   });
 
   test.each([
     ['自分自身', 'linear'],
     ['子孫', 'exercise'],
-  ])('%sの下へは移動できず invalidMove', async (_, newParentId) => {
-    const db = await createTreeDb();
-    await expectAppError(
-      moveNotebook(db, asNotebookId('linear'), asNotebookId(newParentId)),
+  ] as const)('%sの下へは移動できず invalidMove', async (_, target) => {
+    await expectRejectedWithoutChange(
+      () => moveNotebook(shelf, tree.linear, tree[target]),
       'invalidMove',
     );
-    expect((await findNotebook(db, asNotebookId('linear')))?.parentId).toBe('univ');
   });
 
   test('移動先に同名があれば duplicateName', async () => {
-    const db = await createTreeDb();
-    await insertNotebookRow(db, { id: 'other-exercise', parentId: 'hobby', name: '演習' });
-    await expectAppError(
-      moveNotebook(db, asNotebookId('other-exercise'), asNotebookId('linear')),
+    const other = await createNotebook(shelf, '演習', tree.hobby);
+    mockNotify.mockClear();
+    await expectRejectedWithoutChange(
+      () => moveNotebook(shelf, other, tree.linear),
       'duplicateName',
     );
   });
 
-  test('ライブラリ直下に同名があれば duplicateName', async () => {
-    const db = await createTreeDb();
-    await insertNotebookRow(db, { id: 'nested-hobby', parentId: 'univ', name: '趣味' });
-    await expectAppError(moveNotebook(db, asNotebookId('nested-hobby'), null), 'duplicateName');
+  test('ライブラリ直下に同名（ノートを含む）があれば duplicateName', async () => {
+    const nestedHobby = await createNotebook(shelf, '趣味', tree.univ);
+    await captureNote('講義', null);
+    const nestedLecture = await createNotebook(shelf, '講義', tree.univ);
+    mockNotify.mockClear();
+
+    await expectRejectedWithoutChange(
+      () => moveNotebook(shelf, nestedHobby, null),
+      'duplicateName',
+    );
+    await expectRejectedWithoutChange(
+      () => moveNotebook(shelf, nestedLecture, null),
+      'duplicateName',
+    );
   });
 });
 
-test('deleteNotebookWithContents: 子孫ごと DB から消し、含まれるページの画像を消して通知する', async () => {
-  const db = await createTreeDb();
-  await insertNoteRow(db, { id: 'linear-note', notebookId: 'linear', title: '第1回' });
-  await insertPageRow(db, { id: 'p1', noteId: 'linear-note', position: 0 });
-  await insertNoteRow(db, { id: 'exercise-note', notebookId: 'exercise', title: '演習1' });
-  await insertPageRow(db, { id: 'p2', noteId: 'exercise-note', position: 0 });
-  await insertNoteRow(db, { id: 'hobby-note', notebookId: 'hobby', title: '料理' });
-  await insertPageRow(db, { id: 'p3', noteId: 'hobby-note', position: 0 });
+test('deleteNotebookWithContents: フォルダを中身ごと消し、子孫ごと DB から消し、サムネイルを消して通知する', async () => {
+  const linearNote = await captureNote('第1回', tree.linear);
+  const exerciseNote = await captureNote('演習1', tree.exercise);
+  const hobbyNote = await captureNote('料理', tree.hobby);
+  const pageIds = [...linearNote.pageIds, ...exerciseNote.pageIds];
+  for (const pageId of pageIds) expect(thumbnailFile(shelf.id, pageId).exists).toBe(true);
+  mockNotify.mockClear();
 
-  await deleteNotebookWithContents(db, asNotebookId('linear'));
+  await deleteNotebookWithContents(shelf, tree.linear);
 
-  expect((await listAllNotebooks(db)).map((notebook) => notebook.id).sort()).toEqual([
-    'hobby',
-    'univ',
-  ]);
-  expect(await findNote(db, asNoteId('exercise-note'))).toBeNull();
-  expect(await findPage(db, asPageId('p1'))).toBeNull();
-  expect(await findPage(db, asPageId('p3'))).not.toBeNull();
-  expect(mockDeletedImages.map((ids) => [...ids].sort())).toEqual([['p1', 'p2']]);
+  expect(entriesOf('大学')).toEqual(['.leaves.json']);
+  expect((await listAllNotebooks(shelf.db)).map((notebook) => notebook.id).sort()).toEqual(
+    [tree.univ, tree.hobby].sort(),
+  );
+  expect(await findNote(shelf.db, exerciseNote.noteId)).toBeNull();
+  expect(await findNote(shelf.db, linearNote.noteId)).toBeNull();
+  for (const pageId of pageIds) {
+    expect(await findPage(shelf.db, pageId)).toBeNull();
+    expect(thumbnailFile(shelf.id, pageId).exists).toBe(false);
+  }
+  // 関係のないノートは残る
+  expect(await findPage(shelf.db, hobbyNote.pageIds[0]!)).not.toBeNull();
+  expect(thumbnailFile(shelf.id, hobbyNote.pageIds[0]!).exists).toBe(true);
+  expect(entriesOf('趣味', '料理')).toEqual(['.leaves.json', '001.jpg']);
   expect(mockNotify).toHaveBeenCalledTimes(1);
 });

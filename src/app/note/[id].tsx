@@ -1,6 +1,7 @@
 // SC-5 ノート表示（基本設計書 4.3）
 import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import * as Clipboard from 'expo-clipboard';
+import type { Directory } from 'expo-file-system';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import {
@@ -27,7 +28,7 @@ import { useNote } from '@/hooks/useNote';
 import { shareExport, type ExportFormat } from '@/services/export/shareExport';
 import { deleteNote, renameNote } from '@/services/notes';
 import { retryOcr } from '@/services/ocrQueue';
-import { useDb } from '@/state/database';
+import { useShelf } from '@/state/openShelf';
 import { pageImageFile, thumbnailFile } from '@/storage/paths';
 import { useTheme } from '@/theme/useTheme';
 import { ActionMenu, type ActionMenuItem } from '@/ui/components/ActionMenu';
@@ -53,12 +54,12 @@ export default function NoteScreen() {
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const galleryRef = useRef<GalleryRefType>(null);
-  const db = useDb();
+  const shelf = useShelf();
   const { colors, fonts } = useTheme();
   const { scan, importPhotos } = useCaptureLauncher({ noteId });
 
   if (!data) return <View style={{ flex: 1, backgroundColor: colors.stage }} />;
-  const { note, pages, notebookPath } = data;
+  const { note, pages, notebookPath, noteDirectory } = data;
   const currentPage = pages[Math.min(currentIndex, pages.length - 1)];
 
   function showPage(index: number) {
@@ -68,7 +69,7 @@ export default function NoteScreen() {
 
   async function exportAs(format: ExportFormat) {
     try {
-      await shareExport(db, format, noteId, { pageId: currentPage?.id });
+      await shareExport(shelf, format, noteId, { pageId: currentPage?.id });
     } catch (error) {
       Alert.alert(isAppError(error) ? errorMessages[error.kind] : '書き出しに失敗しました');
     }
@@ -76,7 +77,7 @@ export default function NoteScreen() {
 
   async function rename(title: string) {
     try {
-      await renameNote(db, noteId, title);
+      await renameNote(shelf, noteId, title);
     } catch (error) {
       Alert.alert(isAppError(error) ? errorMessages[error.kind] : '名前を変更できませんでした');
       throw error; // ダイアログを閉じずに入力し直してもらう
@@ -87,7 +88,7 @@ export default function NoteScreen() {
   function confirmDelete() {
     Alert.alert(`「${note.title}」を削除しますか？`, `${pages.length} ページが削除されます`, [
       { text: 'キャンセル', style: 'cancel' },
-      { text: '削除', style: 'destructive', onPress: () => deleteNote(db, noteId) },
+      { text: '削除', style: 'destructive', onPress: () => deleteNote(shelf, noteId) },
     ]);
   }
 
@@ -136,6 +137,7 @@ export default function NoteScreen() {
 
       <PageGallery
         pages={pages}
+        noteDirectory={noteDirectory}
         initialIndex={currentIndex}
         galleryRef={galleryRef}
         onIndexChange={setCurrentIndex}
@@ -176,7 +178,7 @@ export default function NoteScreen() {
             </ToolButton>
           </View>
           {currentPage ? (
-            <OcrSection page={currentPage} onRetry={() => retryOcr(db, currentPage.id)} />
+            <OcrSection page={currentPage} onRetry={() => retryOcr(shelf, currentPage.id)} />
           ) : null}
         </BottomSheetScrollView>
       </BottomSheet>
@@ -201,11 +203,13 @@ export default function NoteScreen() {
 /** ページを左右スワイプで切り替え、ピンチで拡大する（FR-N-01〜02） */
 function PageGallery({
   pages,
+  noteDirectory,
   initialIndex,
   galleryRef,
   onIndexChange,
 }: {
   pages: Page[];
+  noteDirectory: Directory;
   initialIndex: number;
   galleryRef: React.RefObject<GalleryRefType | null>;
   onIndexChange: (index: number) => void;
@@ -222,7 +226,7 @@ function PageGallery({
           onIndexChange={onIndexChange}
           renderItem={(page) => (
             <Image
-              source={{ uri: pageImageFile(page.id).uri }}
+              source={{ uri: pageImageFile(noteDirectory, page.position).uri }}
               style={fitContainer(page.width / page.height, {
                 width: size.width - PAGE_MARGIN * 2,
                 height: size.height - PAGE_MARGIN * 2,
@@ -248,6 +252,7 @@ function PageStrip({
   onSelect: (index: number) => void;
 }) {
   const { colors, fonts } = useTheme();
+  const shelf = useShelf();
   return (
     <View style={styles.strip}>
       <ScrollView
@@ -271,7 +276,7 @@ function PageStrip({
             ]}
           >
             <Image
-              source={{ uri: thumbnailFile(page.id).uri }}
+              source={{ uri: thumbnailFile(shelf.id, page.id).uri }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
             />

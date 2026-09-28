@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import type { Db } from '@/db/db';
-import { useDb } from '@/state/database';
+import { useDb } from '@/state/openShelf';
 import { subscribeDataChanged } from '@/state/dataChanges';
 
 /**

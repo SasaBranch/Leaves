@@ -1,43 +1,35 @@
+import { Directory, File } from 'expo-file-system';
+
 import { asNoteId, asPageId } from '../../../test/builders';
-import { fakeFiles } from '../../../test/fakeFileSystem';
-import { createMigratedTestDb, insertNoteRow, insertPageRow } from '../../../test/migratedTestDb';
+import { insertNoteRow, insertPageRow } from '../../../test/migratedTestDb';
+import { createTestShelf } from '../../../test/testShelf';
 import { copyPageImage } from './pageImage';
 
-// 共通の偽物にはコピーがないため、このテストでだけ足す
-jest.mock('expo-file-system', () => {
-  const fake = jest.requireActual('../../../test/fakeFileSystem');
-  class File extends fake.File {
-    async copy(destination: { uri: string }) {
-      fake.fakeFiles.add(destination.uri);
-    }
-  }
-  return { ...fake, File };
-});
-
 async function createNoteWithPages() {
-  const db = await createMigratedTestDb();
-  await insertNoteRow(db, { id: 'note', title: '議事録: 10/15' });
-  // 削除で position に隙間があっても、ページ番号は並び順で数える
-  await insertPageRow(db, { id: 'first', noteId: 'note', position: 0 });
-  await insertPageRow(db, { id: 'second', noteId: 'note', position: 5 });
-  return db;
+  const shelf = await createTestShelf();
+  await insertNoteRow(shelf.db, { id: 'note', title: '議事録 10.15' });
+  await insertPageRow(shelf.db, { id: 'first', noteId: 'note', position: 0 });
+  await insertPageRow(shelf.db, { id: 'second', noteId: 'note', position: 1 });
+  const folder = new Directory(shelf.directory, '議事録 10.15');
+  folder.create();
+  new File(folder, '001.jpg').write('first');
+  new File(folder, '002.jpg').write('second');
+  return shelf;
 }
 
-beforeEach(() => fakeFiles.clear());
-
 test('ページ画像を「タイトル_pページ番号.jpg」として書き出し用フォルダにコピーする', async () => {
-  const db = await createNoteWithPages();
-  fakeFiles.add('doc/pages/second.jpg');
+  const shelf = await createNoteWithPages();
 
-  const file = await copyPageImage(db, asNoteId('note'), { pageId: asPageId('second') });
+  const exported = await copyPageImage(shelf, asNoteId('note'), { pageId: asPageId('second') });
 
-  expect(file).toEqual({ uri: 'cache/export/議事録_ 10_15_p2.jpg', mimeType: 'image/jpeg' });
-  expect(fakeFiles.has('cache/export/議事録_ 10_15_p2.jpg')).toBe(true);
+  expect(exported.mimeType).toBe('image/jpeg');
+  expect(exported.uri.endsWith('/export/%E8%AD%B0%E4%BA%8B%E9%8C%B2%2010.15_p2.jpg')).toBe(true);
+  expect(new File(exported.uri).textSync()).toBe('second');
 });
 
 test('ノートにないページは書き出さない', async () => {
-  const db = await createNoteWithPages();
-  await expect(copyPageImage(db, asNoteId('note'), { pageId: asPageId('other') })).rejects.toThrow(
-    /ページがノートにありません/,
-  );
+  const shelf = await createNoteWithPages();
+  await expect(
+    copyPageImage(shelf, asNoteId('note'), { pageId: asPageId('other') }),
+  ).rejects.toThrow(/ページがノートにありません/);
 });

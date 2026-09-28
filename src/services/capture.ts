@@ -1,86 +1,106 @@
 // ノート作成・ページ追加（詳細設計書 9.1）。
-// 画像を先に保存し、DB は最後に1トランザクションで登録する（NFR-R-01）。
+// ノートのフォルダを作業用フォルダで組み立ててから1回の移動で本棚に置き、最後に DB に登録する（NFR-R-01、ADR 0016）。
+import { Directory } from 'expo-file-system';
+
 import type { Db } from '@/db/db';
 import { insertNote, markNoteUpdated } from '@/db/noteRepository';
-import { getNextPagePosition, insertPage } from '@/db/pageRepository';
+import { insertPage } from '@/db/pageRepository';
+import { pickAvailableName } from '@/domain/name';
 import type { CapturedImage, IsoDateTime, NoteId, NotebookId } from '@/domain/types';
 import { newNoteId } from '@/native/randomId';
 import { notifyDataChanged } from '@/state/dataChanges';
-import {
-  deletePageImages,
-  discardCapturedImages,
-  storePageImages,
-  withImageOperation,
-  type StoredPageImage,
-} from '@/storage/pageImages';
+import type { OpenShelf } from '@/state/openShelf';
+import { newNoteManifest, writeManifest, type PageManifest } from '@/storage/manifest';
+import { discardCapturedImages, storePageImages } from '@/storage/pageImages';
+import { workDirectory } from '@/storage/paths';
 
+import {
+  getNoteWithDirectory,
+  listEntryNames,
+  locateNotebookDirectory,
+  readNoteManifest,
+  updateNoteManifest,
+} from './folders';
 import { enqueueOcr } from './ocrQueue';
 
+/** 保存先に同じ名前があれば "タイトル (2)" などにする（FR-S-07） */
 export async function createNoteFromCapture(
-  db: Db,
+  shelf: OpenShelf,
   input: { images: CapturedImage[]; title: string; notebookId: NotebookId | null },
 ): Promise<NoteId> {
   const noteId = newNoteId();
-  const storedPages = await storeAndRegisterImages(input.images, (pages, now) =>
-    db.transaction(async (tx) => {
-      await insertNote(tx, {
-        id: noteId,
-        notebookId: input.notebookId,
-        title: input.title,
-        createdAt: now,
-        updatedAt: now,
-      });
-      await insertPages(tx, noteId, pages, 0, now);
-    }),
-  );
-  finishCapture(input.images, storedPages);
+  const pages = await shelf.runExclusively(async () => {
+    const now = new Date().toISOString();
+    const assembled = await assembleNoteInWorkDirectory(shelf, noteId, input.images, now);
+    const parent = await locateNotebookDirectory(shelf, input.notebookId);
+    const title = pickAvailableName(listEntryNames(parent), input.title);
+    assembled.move(new Directory(parent, title));
+    // ここで終了しても、フォルダが正本なので次の外部変更の反映で DB に登録される
+    await shelf.db.transaction(async (tx) => {
+      await insertNote(tx, { id: noteId, notebookId: input.notebookId, title, createdAt: now, updatedAt: now });
+      await insertPages(tx, noteId, assembled.pages, 0, now);
+    });
+    return assembled.pages;
+  });
+  finishCapture(input.images, pages);
   return noteId;
 }
 
 /** 既存ノートの末尾にページを追加する（FR-N-06） */
 export async function addPagesToNote(
-  db: Db,
+  shelf: OpenShelf,
   noteId: NoteId,
   images: CapturedImage[],
 ): Promise<void> {
-  const storedPages = await storeAndRegisterImages(images, (pages, now) =>
-    db.transaction(async (tx) => {
-      const firstPosition = await getNextPagePosition(tx, noteId);
-      await insertPages(tx, noteId, pages, firstPosition, now);
+  const pages = await shelf.runExclusively(async () => {
+    const now = new Date().toISOString();
+    const { directory } = await getNoteWithDirectory(shelf, noteId);
+    const firstPosition = readNoteManifest(directory).pages.length;
+    const added = await storePageImages(images, directory, firstPosition, shelf.id, now);
+    updateNoteManifest(directory, (manifest) => ({
+      ...manifest,
+      updatedAt: now,
+      pages: [...manifest.pages, ...added],
+    }));
+    await shelf.db.transaction(async (tx) => {
+      await insertPages(tx, noteId, added, firstPosition, now);
       await markNoteUpdated(tx, noteId, now);
-    }),
-  );
-  finishCapture(images, storedPages);
+    });
+    return added;
+  });
+  finishCapture(images, pages);
 }
 
 /**
- * 画像を先に保存し、DB に登録する。登録に失敗したら保存した画像を消してから例外を投げる
- * （画像だけが残らないように。NFR-R-01）。途中で終了した場合に備えて全体を withImageOperation で囲む
+ * 作業用フォルダ（本棚と同じボリューム）に、ページ画像と .leaves.json を持つノートのフォルダを作る。
+ * 失敗したら作業用フォルダを消してから例外を投げる
  */
-function storeAndRegisterImages(
+async function assembleNoteInWorkDirectory(
+  shelf: OpenShelf,
+  noteId: NoteId,
   images: CapturedImage[],
-  register: (pages: StoredPageImage[], now: IsoDateTime) => Promise<void>,
-): Promise<StoredPageImage[]> {
-  return withImageOperation(async () => {
-    const storedPages = await storePageImages(images);
-    try {
-      await register(storedPages, new Date().toISOString());
-    } catch (error) {
-      deletePageImages(storedPages.map((page) => page.id));
-      throw error;
-    }
-    return storedPages;
-  });
+  now: IsoDateTime,
+): Promise<{ move(target: Directory): void; pages: PageManifest[] }> {
+  const folder = new Directory(workDirectory(), noteId);
+  folder.create({ intermediates: true, overwrite: true });
+  try {
+    const pages = await storePageImages(images, folder, 0, shelf.id, now);
+    writeManifest(folder, newNoteManifest(noteId, pages, now));
+    return { move: (target) => folder.moveSync(target), pages };
+  } catch (error) {
+    folder.delete();
+    throw error;
+  }
 }
 
 async function insertPages(
   db: Db,
   noteId: NoteId,
-  storedPages: StoredPageImage[],
+  pages: PageManifest[],
   firstPosition: number,
   now: IsoDateTime,
 ): Promise<void> {
-  for (const [index, page] of storedPages.entries()) {
+  for (const [index, page] of pages.entries()) {
     await insertPage(db, {
       id: page.id,
       noteId,
@@ -97,8 +117,8 @@ async function insertPages(
 }
 
 /** 登録が確定した後の後始末と、画面・OCR への引き継ぎ */
-function finishCapture(images: CapturedImage[], storedPages: StoredPageImage[]): void {
+function finishCapture(images: CapturedImage[], pages: PageManifest[]): void {
   discardCapturedImages(images);
   notifyDataChanged();
-  enqueueOcr(storedPages.map((page) => page.id));
+  enqueueOcr(pages.map((page) => page.id));
 }

@@ -16,7 +16,7 @@ import {
 } from '@/services/notebooks';
 import { shareExport } from '@/services/export/shareExport';
 import { deleteNote, renameNote } from '@/services/notes';
-import { useDb } from '@/state/database';
+import { useShelf } from '@/state/openShelf';
 import { ActionMenu, type ActionMenuItem } from '@/ui/components/ActionMenu';
 import { TextPromptModal } from '@/ui/components/TextPromptModal';
 import { errorMessages } from '@/ui/errorMessages';
@@ -38,7 +38,7 @@ export function useItemMenus(): {
   openCreateNotebook: (parentId: NotebookId | null) => void;
   menusElement: ReactElement;
 } {
-  const db = useDb();
+  const shelf = useShelf();
   const [menu, setMenu] = useState<Menu | null>(null);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
 
@@ -47,7 +47,7 @@ export function useItemMenus(): {
       title: '新しいノートブック',
       submitLabel: '作成',
       onSubmit: showingErrors(async (name) => {
-        await createNotebook(db, name, parentId);
+        await createNotebook(shelf, name, parentId);
       }),
     });
 
@@ -62,7 +62,7 @@ export function useItemMenus(): {
               title: 'ノートブックの名前',
               initialValue: notebook.name,
               submitLabel: '変更',
-              onSubmit: showingErrors((name) => renameNotebook(db, notebook.id, name)),
+              onSubmit: showingErrors((name) => renameNotebook(shelf, notebook.id, name)),
             }),
         },
         {
@@ -72,7 +72,7 @@ export function useItemMenus(): {
               title: '表紙の色',
               items: NOTEBOOK_COLORS.map((color, index) => ({
                 label: COLOR_NAMES[index] ?? color,
-                onPress: () => changeNotebookColor(db, notebook.id, color),
+                onPress: () => changeNotebookColor(shelf, notebook.id, color),
               })),
             }),
         },
@@ -97,7 +97,7 @@ export function useItemMenus(): {
               title: 'ノートの名前',
               initialValue: note.title,
               submitLabel: '変更',
-              onSubmit: showingErrors((title) => renameNote(db, note.id, title)),
+              onSubmit: showingErrors((title) => renameNote(shelf, note.id, title)),
             }),
         },
         {
@@ -115,7 +115,7 @@ export function useItemMenus(): {
               `${note.pageCount} ページが削除されます`,
               [
                 { text: 'キャンセル', style: 'cancel' },
-                { text: '削除', style: 'destructive', onPress: () => deleteNote(db, note.id) },
+                { text: '削除', style: 'destructive', onPress: () => deleteNote(shelf, note.id) },
               ],
             ),
         },
@@ -124,7 +124,7 @@ export function useItemMenus(): {
 
   async function exportNote(note: NoteSummary, format: 'pdf' | 'markdown') {
     try {
-      await shareExport(db, format, note.id);
+      await shareExport(shelf, format, note.id);
     } catch (error) {
       Alert.alert(isAppError(error) ? errorMessages[error.kind] : '書き出しに失敗しました');
     }
@@ -132,7 +132,7 @@ export function useItemMenus(): {
 
   /** 中身の件数を示してから確認する（FR-F-05。ゴミ箱がないため） */
   async function confirmDeleteNotebook(notebook: Notebook) {
-    const contents = await countNotebookContents(db, notebook.id);
+    const contents = await countNotebookContents(shelf.db, notebook.id);
     Alert.alert(
       `「${notebook.name}」を削除しますか？`,
       `中のノートブック ${contents.notebooks} 件・ノート ${contents.notes} 件もすべて削除されます`,
@@ -141,7 +141,7 @@ export function useItemMenus(): {
         {
           text: '削除',
           style: 'destructive',
-          onPress: () => deleteNotebookWithContents(db, notebook.id),
+          onPress: () => deleteNotebookWithContents(shelf, notebook.id),
         },
       ],
     );

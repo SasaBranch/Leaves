@@ -2,19 +2,16 @@
 import { File } from 'expo-file-system';
 
 import { DEFAULT_EXPORT_FILE_NAME } from '@/config';
+import { replaceForbiddenCharacters } from '@/domain/name';
 import { exportDirectory } from '@/storage/paths';
 
 /** 共有シートに渡す書き出しファイル */
 export type ExportFile = { uri: string; mimeType: string };
 
-// OS やクラウドストレージでファイル名に使えない文字
-const FORBIDDEN_CHARACTERS = /[/\\:*?"<>|]/g;
-
 /** ノートのタイトルを、どの共有先でも使えるファイル名（拡張子なし）にする */
 export function sanitizeFileName(title: string): string {
   // 末尾のピリオドは Windows で消されて拡張子の区切りと紛れるため、空白と一緒に除く
-  const name = title
-    .replace(FORBIDDEN_CHARACTERS, '_')
+  const name = replaceForbiddenCharacters(title, '_')
     .trim()
     .replace(/[.\s]+$/, '');
   return name === '' ? DEFAULT_EXPORT_FILE_NAME : name;

@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NoteId, Page, PageId } from '@/domain/types';
 import { useNote } from '@/hooks/useNote';
 import { deletePage, reorderPages } from '@/services/notes';
-import { useDb } from '@/state/database';
+import { useShelf } from '@/state/openShelf';
 import { thumbnailFile } from '@/storage/paths';
 import { useTheme } from '@/theme/useTheme';
 
@@ -25,13 +25,13 @@ export default function ReorderScreen() {
   const noteId = id as NoteId;
   const { pages, isChanged, reorder, removeFromOrder } = usePageOrder(noteId);
   const confirmDelete = useConfirmDeletePage(pages.length, removeFromOrder);
-  const db = useDb();
+  const shelf = useShelf();
   const { colors } = useTheme();
 
   async function saveAndClose() {
     if (isChanged) {
       await reorderPages(
-        db,
+        shelf,
         noteId,
         pages.map((page) => page.id),
       );
@@ -77,10 +77,10 @@ function usePageOrder(noteId: NoteId) {
 
 /** ページの削除は確認のうえ即座に行う（キャンセルで戻せるのは並び順だけ）。最後の1ページならノートごと消える（FR-N-08） */
 function useConfirmDeletePage(pageCount: number, removeFromOrder: (pageId: PageId) => void) {
-  const db = useDb();
+  const shelf = useShelf();
 
   async function remove(page: Page) {
-    const { noteDeleted } = await deletePage(db, page.id);
+    const { noteDeleted } = await deletePage(shelf, page.id);
     if (noteDeleted) router.dismissTo('/');
     else removeFromOrder(page.id);
   }
@@ -139,6 +139,7 @@ function PageRow({
 }) {
   const drag = useReorderableDrag();
   const { colors, fonts } = useTheme();
+  const shelf = useShelf();
   return (
     <Pressable
       accessibilityLabel={`${pageNumber} ページ目`}
@@ -148,7 +149,7 @@ function PageRow({
     >
       <GripVertical size={20} color={colors.muted} />
       <Image
-        source={{ uri: thumbnailFile(page.id).uri }}
+        source={{ uri: thumbnailFile(shelf.id, page.id).uri }}
         style={[
           styles.thumbnail,
           { aspectRatio: page.width / page.height, backgroundColor: colors.paper },

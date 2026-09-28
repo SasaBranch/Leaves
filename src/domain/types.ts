@@ -6,11 +6,15 @@ type Brand<T, Name extends string> = T & { readonly __brand: Name };
 export type NotebookId = Brand<string, 'NotebookId'>;
 export type NoteId = Brand<string, 'NoteId'>;
 export type PageId = Brand<string, 'PageId'>;
+export type ShelfId = Brand<string, 'ShelfId'>;
 
 /** ISO 8601（UTC） */
 export type IsoDateTime = string;
 
 export type NotebookColor = (typeof NOTEBOOK_COLORS)[number];
+
+/** ノートブック・ノート一式の保存単位。Documents 直下の1フォルダ（基本設計書 5.4） */
+export type Shelf = { id: ShelfId; name: string };
 
 export type Notebook = {
   id: NotebookId;

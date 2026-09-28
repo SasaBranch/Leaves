@@ -44,3 +44,18 @@ export const NOTEBOOK_COLORS = [
 
 /** 書き出しファイル名が空になったときの代わり */
 export const DEFAULT_EXPORT_FILE_NAME = 'Leaves';
+
+/** SC-9 の本棚名の初期値と、v1.0 のデータの移行先（基本設計書 4.3, 6.9） */
+export const DEFAULT_SHELF_NAME = 'マイ本棚';
+
+/** ページのファイル名の桁数（001.jpg）。Finder で 999 ページまで番号順に並ぶ */
+export const PAGE_FILE_NUMBER_DIGITS = 3;
+
+/** 外部で置かれた画像のうち、ページとして取り込むもの（基本設計書 6.7）。小文字で比較する */
+export const SUPPORTED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.heic'];
+
+/**
+ * 外部変更の走査で、何フォルダごとに画面の描画・操作へ順番を譲るか。
+ * ファイル操作は JS スレッドを止めるため、1,000 フォルダ（約1秒）を一度に走らせないようにする（ADR 0021）
+ */
+export const SYNC_YIELD_EVERY_FOLDERS = 50;

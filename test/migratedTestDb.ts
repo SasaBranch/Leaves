@@ -14,6 +14,14 @@ export async function createMigratedTestDb(): Promise<Db> {
   return db;
 }
 
+/** v1.0 のスキーマ（マイグレーション 1 まで）の DB。旧データの移行のテスト用 */
+export async function createSchemaV1TestDb(): Promise<Db> {
+  const db = createTestDb();
+  await configureConnection(db);
+  await migrateDatabase(db, 1);
+  return db;
+}
+
 export async function insertNotebookRow(
   db: Db,
   row: { id: string; parentId?: string | null; name: string },

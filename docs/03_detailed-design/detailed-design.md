@@ -169,7 +169,7 @@ src/
 │   ├── capture.tsx                … SC-4 スキャン保存
 │   ├── search.tsx                 … SC-7 検索
 │   ├── move.tsx                   … SC-8 移動先選択
-│   └── settings.tsx               … SC-10 設定
+│   └── settings.tsx               … SC-10 設定（SC-9 は ui/components/WelcomeScreen.tsx）
 ├── domain/
 │   ├── types.ts                   … 型定義（5 章）
 │   ├── name.ts                    … 名前の規則（9.11）
@@ -180,6 +180,8 @@ src/
 │   ├── expoSqliteDriver.ts        … アプリ用 SqlDriver（expo-sqlite）
 │   ├── migrations.ts              … スキーマ（追記のみ）
 │   ├── openShelfDatabase.ts       … 本棚の DB を開く（旧 openAppDatabase）
+│   ├── openLegacyDatabase.ts      … v1.0 の DB を開く（移行用）
+│   ├── indexRepository.ts         … 外部変更の反映のための一括の読み書き
 │   ├── notebookRepository.ts
 │   ├── noteRepository.ts
 │   ├── pageRepository.ts
@@ -200,6 +202,7 @@ src/
 │   ├── notes.ts                   … ノートの移動・削除、ページの並べ替え・削除
 │   ├── ocrQueue.ts                … OCR キュー（開いている本棚のみ）
 │   ├── shelves.ts                 … 本棚の一覧・作成・名前変更・削除・開く・閉じる（9.8）
+│   ├── folders.ts                 … DB の親子・名前から本棚フォルダ内の場所を求める
 │   ├── sync/                      … 外部変更の反映（9.9）
 │   │   ├── syncShelf.ts           … 目次（走査 → 正規化 → DB に反映）
 │   │   ├── scanShelf.ts           … 本棚フォルダを読む

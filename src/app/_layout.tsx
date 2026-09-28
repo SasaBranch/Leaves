@@ -6,24 +6,26 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-import type { Db } from '@/db/db';
-import { openAppDatabase } from '@/db/openAppDatabase';
-import { runStartupMaintenance } from '@/services/integrity';
-import { DatabaseProvider } from '@/state/database';
+import type { Shelf } from '@/domain/types';
+import { useSyncOnForeground } from '@/hooks/useSyncOnForeground';
+import { closeShelf, openShelf } from '@/services/shelves';
+import { openInitialShelf, runShelfMaintenance } from '@/services/startup';
+import { type OpenShelf, ShelfProvider } from '@/state/openShelf';
 import { appFonts } from '@/theme/fonts';
 import { useTheme } from '@/theme/useTheme';
+import { WelcomeScreen } from '@/ui/components/WelcomeScreen';
 
-// 画面表示に必要なもの（フォント・DB）がそろうまでスプラッシュを表示し続ける（詳細設計書 9.6）
+// 画面表示に必要なもの（フォント・本棚）がそろうまでスプラッシュを表示し続ける（詳細設計書 9.6）
 SplashScreen.preventAutoHideAsync();
 
 /** 基本設計書 4.1 でモーダル表示と決めた画面 */
-const MODAL_SCREENS = ['capture', 'search', 'move', 'note/[id]/reorder'];
+const MODAL_SCREENS = ['capture', 'search', 'move', 'settings', 'note/[id]/reorder'];
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(appFonts);
-  const db = useAppDatabase();
+  const { shelf, switchShelf } = useOpenShelf();
   const { colors, isDark } = useTheme();
-  const isReady = (fontsLoaded || fontError) && db;
+  const isReady = (fontsLoaded || fontError) && shelf !== undefined;
 
   useEffect(() => {
     if (isReady) SplashScreen.hideAsync();
@@ -34,30 +36,67 @@ export default function RootLayout() {
   return (
     // ページのズーム・ボトムシート・並べ替えのジェスチャーに必要
     <GestureHandlerRootView style={styles.root}>
-      <DatabaseProvider db={db}>
-        <StatusBar style={isDark ? 'light' : 'dark'} />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-          {MODAL_SCREENS.map((name) => (
-            <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
-          ))}
-        </Stack>
-      </DatabaseProvider>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      {shelf === null ? (
+        // 本棚がないときの入口。戻る先がないため、ルートではなく部品として出す（詳細設計書 9.6）
+        <WelcomeScreen onCreated={switchShelf} />
+      ) : (
+        <ShelfProvider value={{ shelf, switchShelf }}>
+          <SyncOnForeground shelf={shelf} />
+          {/* 本棚を切り替えたら画面の木を作り直す（前の本棚のデータを持った画面を残さないため。詳細設計書 4.4） */}
+          <Stack
+            key={shelf.id}
+            screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
+          >
+            {MODAL_SCREENS.map((name) => (
+              <Stack.Screen key={name} name={name} options={{ presentation: 'modal' }} />
+            ))}
+          </Stack>
+        </ShelfProvider>
+      )}
     </GestureHandlerRootView>
   );
 }
 
-/** DB を開き、画面表示の後に保守処理（整合性チェック・OCR キュー開始）を裏で始める */
-function useAppDatabase(): Db | null {
-  const [db, setDb] = useState<Db | null>(null);
+function SyncOnForeground({ shelf }: { shelf: OpenShelf }) {
+  useSyncOnForeground(shelf);
+  return null;
+}
+
+/**
+ * 開いている本棚。undefined は読み込み中、null は本棚がない（本棚の作成画面を出す）。
+ * 開いた後の保守処理（外部変更の反映・OCR キュー開始）は、画面表示の後に裏で始める
+ */
+function useOpenShelf() {
+  const [shelf, setShelf] = useState<OpenShelf | null | undefined>(undefined);
+
   useEffect(() => {
-    openAppDatabase().then((opened) => {
-      setDb(opened);
-      runStartupMaintenance(opened).catch((error: unknown) =>
-        console.warn('起動時の保守処理に失敗しました', error),
-      );
-    });
+    openInitialShelf().then(
+      (opened) => {
+        setShelf(opened);
+        if (opened) startMaintenance(opened);
+      },
+      (error: unknown) => {
+        console.error('本棚を開けませんでした', error);
+        setShelf(null);
+      },
+    );
   }, []);
-  return db;
+
+  async function switchShelf(target: Shelf | null): Promise<void> {
+    if (shelf) await closeShelf(shelf);
+    const opened = target ? await openShelf(target) : null;
+    setShelf(opened);
+    if (opened) startMaintenance(opened);
+  }
+
+  return { shelf, switchShelf };
+}
+
+function startMaintenance(shelf: OpenShelf): void {
+  runShelfMaintenance(shelf).catch((error: unknown) =>
+    console.warn('本棚の保守処理に失敗しました', error),
+  );
 }
 
 const styles = StyleSheet.create({

@@ -31,29 +31,10 @@ describe('migrateDatabase', () => {
 });
 
 describe('notebooks の制約', () => {
-  test('同じ親の下に同名のノートブックは作れない（FR-F-06）', async () => {
-    const db = await createMigratedTestDb();
-    await insertNotebookRow(db, { id: 'parent', name: '大学' });
-    await insertNotebookRow(db, { id: 'a', parentId: 'parent', name: '線形代数' });
-    await expect(
-      insertNotebookRow(db, { id: 'b', parentId: 'parent', name: '線形代数' }),
-    ).rejects.toThrow(/UNIQUE/);
-  });
-
-  test('ライブラリ直下（parent_id が NULL）でも同名は作れない', async () => {
+  test('同じ場所の同名は DB では防がない（フォルダが防ぐ。外部で付けられた名前を取り込めるように。ADR 0016）', async () => {
     const db = await createMigratedTestDb();
     await insertNotebookRow(db, { id: 'a', name: '大学' });
-    await expect(insertNotebookRow(db, { id: 'b', name: '大学' })).rejects.toThrow(/UNIQUE/);
-  });
-
-  test('親が違えば同名を作れる', async () => {
-    const db = await createMigratedTestDb();
-    await insertNotebookRow(db, { id: 'p1', name: '大学' });
-    await insertNotebookRow(db, { id: 'p2', name: '仕事' });
-    await insertNotebookRow(db, { id: 'a', parentId: 'p1', name: 'メモ' });
-    await expect(insertNotebookRow(db, { id: 'b', parentId: 'p2', name: 'メモ' })).resolves.toBe(
-      undefined,
-    );
+    await expect(insertNotebookRow(db, { id: 'b', name: '大学' })).resolves.toBeUndefined();
   });
 
   test('空白だけの名前は作れない', async () => {

@@ -3,7 +3,7 @@
 import { NotoSansJP_400Regular } from '@expo-google-fonts/noto-sans-jp/400Regular';
 import fontkit from '@pdf-lib/fontkit';
 import { Asset } from 'expo-asset';
-import { File } from 'expo-file-system';
+import { type Directory, File } from 'expo-file-system';
 import {
   beginText,
   endText,
@@ -22,27 +22,27 @@ import {
 } from 'pdf-lib';
 
 import { OCR_TEXT_HEIGHT_RATIO, PDF_PAGE_WIDTH_PT } from '@/config';
-import type { Db } from '@/db/db';
-import { findNote } from '@/db/noteRepository';
 import { listPagesOfNote } from '@/db/pageRepository';
 import type { NoteId, OcrLine, Page } from '@/domain/types';
+import type { OpenShelf } from '@/state/openShelf';
 import { pageImageFile } from '@/storage/paths';
+
+import { getNoteWithDirectory } from '../folders';
 
 import { type ExportFile, prepareExportFile, sanitizeFileName } from './fileName';
 
 const PDF_MIME_TYPE = 'application/pdf';
 
-export async function buildPdf(db: Db, noteId: NoteId): Promise<ExportFile> {
-  const note = await findNote(db, noteId);
-  if (!note) throw new Error(`書き出すノートが見つかりません: ${noteId}`);
-  const pages = await listPagesOfNote(db, noteId);
+export async function buildPdf(shelf: OpenShelf, noteId: NoteId): Promise<ExportFile> {
+  const { note, directory } = await getNoteWithDirectory(shelf, noteId);
+  const pages = await listPagesOfNote(shelf.db, noteId);
 
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   // 使った文字だけを埋め込み、フォント（約 5MB）で PDF が大きくならないようにする
   const font = await pdf.embedFont(await loadJapaneseFontBytes(), { subset: true });
   for (const page of pages) {
-    await addPdfPage(pdf, font, page);
+    await addPdfPage(pdf, font, page, directory);
   }
 
   const file = prepareExportFile(`${sanitizeFileName(note.title)}.pdf`);
@@ -56,8 +56,13 @@ async function loadJapaneseFontBytes(): Promise<Uint8Array> {
   return new File(asset.localUri).bytes();
 }
 
-async function addPdfPage(pdf: PDFDocument, font: PDFFont, page: Page): Promise<void> {
-  const image = await pdf.embedJpg(await pageImageFile(page.id).bytes());
+async function addPdfPage(
+  pdf: PDFDocument,
+  font: PDFFont,
+  page: Page,
+  noteDirectory: Directory,
+): Promise<void> {
+  const image = await pdf.embedJpg(await pageImageFile(noteDirectory, page.position).bytes());
   const pageWidth = PDF_PAGE_WIDTH_PT;
   const pageHeight = (pageWidth * image.height) / image.width;
   const pdfPage = pdf.addPage([pageWidth, pageHeight]);

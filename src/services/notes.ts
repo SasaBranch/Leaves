@@ -1,5 +1,7 @@
 // ノート・ページの操作（詳細設計書 9.4）。
-// DB を先に確定させ、画像ファイルは後から消す（画像だけ消えて DB に残るページを作らないため）。
+// フォルダを先に変更し、成功したら DB に反映する（ADR 0016）。
+import { Directory, File } from 'expo-file-system';
+
 import type { Db } from '@/db/db';
 import {
   deleteNote as deleteNoteRow,
@@ -11,102 +13,159 @@ import {
   deletePage as deletePageRow,
   findPage,
   listPageIdsOfNote,
-  listPagesOfNote,
   updatePagePositions,
 } from '@/db/pageRepository';
-import { normalizeName } from '@/domain/name';
+import { AppError } from '@/domain/errors';
+import { validateName } from '@/domain/name';
 import type { NoteId, NotebookId, PageId } from '@/domain/types';
 import { notifyDataChanged } from '@/state/dataChanges';
-import { deletePageImages, withImageOperation } from '@/storage/pageImages';
+import type { OpenShelf } from '@/state/openShelf';
+import type { NoteManifest, PageManifest } from '@/storage/manifest';
+import { deleteThumbnails, renumberPageFiles } from '@/storage/pageImages';
 
-export async function renameNote(db: Db, id: NoteId, title: string): Promise<void> {
-  await updateNoteTitle(db, id, normalizeName(title), new Date().toISOString());
+import {
+  getNoteWithDirectory,
+  hasEntryNamed,
+  locateNotebookDirectory,
+  readNoteManifest,
+  updateNoteManifest,
+} from './folders';
+
+export async function renameNote(shelf: OpenShelf, id: NoteId, title: string): Promise<void> {
+  const validTitle = validateName(title);
+  await shelf.runExclusively(async () => {
+    const { note, directory } = await getNoteWithDirectory(shelf, id);
+    if (validTitle === note.title) return;
+    if (hasEntryNamed(directory.parentDirectory, validTitle, note.title)) {
+      throw new AppError('duplicateName');
+    }
+    directory.rename(validTitle);
+    await updateNoteTitle(shelf.db, id, validTitle, new Date().toISOString());
+  });
   notifyDataChanged();
 }
 
 /** notebookId が null ならライブラリ直下へ移す */
-export async function moveNote(db: Db, id: NoteId, notebookId: NotebookId | null): Promise<void> {
-  await updateNoteNotebook(db, id, notebookId, new Date().toISOString());
+export async function moveNote(
+  shelf: OpenShelf,
+  id: NoteId,
+  notebookId: NotebookId | null,
+): Promise<void> {
+  await shelf.runExclusively(async () => {
+    const { note, directory } = await getNoteWithDirectory(shelf, id);
+    if (note.notebookId === notebookId) return;
+    const destination = await locateNotebookDirectory(shelf, notebookId);
+    if (hasEntryNamed(destination, note.title)) throw new AppError('duplicateName');
+    directory.moveSync(new Directory(destination, note.title));
+    await updateNoteNotebook(shelf.db, id, notebookId, new Date().toISOString());
+  });
   notifyDataChanged();
 }
 
-export async function deleteNote(db: Db, id: NoteId): Promise<void> {
-  // ページ行は CASCADE で消えるので、消す画像を先に控えておく
-  const pageIds = await listPageIdsOfNote(db, id);
-  await withImageOperation(async () => {
-    await deleteNoteRow(db, id);
-    deletePageImages(pageIds);
+export async function deleteNote(shelf: OpenShelf, id: NoteId): Promise<void> {
+  await shelf.runExclusively(async () => {
+    const { directory } = await getNoteWithDirectory(shelf, id);
+    // ページ行は CASCADE で消えるので、消すサムネイルを先に控えておく
+    const pageIds = await listPageIdsOfNote(shelf.db, id);
+    if (directory.exists) directory.delete();
+    await deleteNoteRow(shelf.db, id);
+    deleteThumbnails(shelf.id, pageIds);
   });
   notifyDataChanged();
 }
 
 export async function reorderPages(
-  db: Db,
+  shelf: OpenShelf,
   noteId: NoteId,
   orderedPageIds: PageId[],
 ): Promise<void> {
-  const now = new Date().toISOString();
-  await db.transaction(async (tx) => {
-    await assertSamePageSet(tx, noteId, orderedPageIds);
-    await updatePagePositions(tx, noteId, orderedPageIds, now);
-    await markNoteUpdated(tx, noteId, now);
+  await shelf.runExclusively(async () => {
+    const { directory } = await getNoteWithDirectory(shelf, noteId);
+    const manifest = readNoteManifest(directory);
+    assertSamePageSet(manifest, orderedPageIds);
+    const byId = new Map(manifest.pages.map((page) => [page.id, page]));
+    const reordered = orderedPageIds.map((id) => byId.get(id)!);
+    await rewritePages(shelf.db, directory, noteId, reordered);
   });
   notifyDataChanged();
 }
 
 /** 最後の1ページならノートごと消す。確認ダイアログは画面側が事前に出す（FR-N-08） */
-export async function deletePage(db: Db, pageId: PageId): Promise<{ noteDeleted: boolean }> {
-  const page = await findPage(db, pageId);
+export async function deletePage(
+  shelf: OpenShelf,
+  pageId: PageId,
+): Promise<{ noteDeleted: boolean }> {
+  const page = await findPage(shelf.db, pageId);
   if (!page) throw new Error(`ページがありません: ${pageId}`);
-
-  let noteDeleted = false;
-  await withImageOperation(async () => {
-    await db.transaction(async (tx) => {
-      const remainingPageIds = await listRemainingPageIds(tx, page.noteId, pageId);
-      noteDeleted = remainingPageIds.length === 0;
-      if (noteDeleted) {
-        await deleteNoteRow(tx, page.noteId);
-      } else {
-        await deletePageAndCompactPositions(tx, page.noteId, pageId, remainingPageIds);
-      }
-    });
-    deletePageImages([pageId]);
+  const remaining = await shelf.runExclusively(async () => {
+    const { directory } = await getNoteWithDirectory(shelf, page.noteId);
+    const pages = readNoteManifest(directory).pages;
+    const deleting = pages.find((entry) => entry.id === pageId);
+    const rest = pages.filter((entry) => entry.id !== pageId);
+    if (rest.length === 0) return rest;
+    if (deleting) new File(directory, deleting.file).delete();
+    await rewritePages(shelf.db, directory, page.noteId, rest, pageId);
+    deleteThumbnails(shelf.id, [pageId]);
+    return rest;
   });
+  if (remaining.length === 0) {
+    await deleteNote(shelf, page.noteId);
+    return { noteDeleted: true };
+  }
   notifyDataChanged();
-  return { noteDeleted };
+  return { noteDeleted: false };
 }
 
-/** 並べ替え後の ID がノートの全ページと過不足なく一致するか。ずれは呼び出し側の誤りなので AppError にしない */
-async function assertSamePageSet(db: Db, noteId: NoteId, orderedPageIds: PageId[]): Promise<void> {
-  const currentPageIds = new Set(await listPageIdsOfNote(db, noteId));
+/**
+ * ページの並びを確定させる: 画像を新しい順番のファイル名に付け直し（001.jpg …）、
+ * .leaves.json → DB の順に反映する。deletedPageId があれば DB からも消す
+ */
+async function rewritePages(
+  db: Db,
+  directory: Directory,
+  noteId: NoteId,
+  orderedPages: PageManifest[],
+  deletedPageId?: PageId,
+): Promise<void> {
+  const now = new Date().toISOString();
+  const fileNames = renumberPageFiles(
+    directory,
+    orderedPages.map((page) => page.file),
+  );
+  updateNoteManifest(directory, (manifest) => ({
+    ...manifest,
+    updatedAt: now,
+    pages: orderedPages.map((page, index) => withRenamedFile(directory, page, fileNames[index]!)),
+  }));
+  await db.transaction(async (tx) => {
+    if (deletedPageId) await deletePageRow(tx, deletedPageId);
+    await updatePagePositions(
+      tx,
+      noteId,
+      orderedPages.map((page) => page.id),
+      now,
+    );
+    await markNoteUpdated(tx, noteId, now);
+  });
+}
+
+/** 名前を付け直したファイルの名前と更新日時を控え直す（外部変更の対応づけに使うため） */
+function withRenamedFile(directory: Directory, page: PageManifest, fileName: string): PageManifest {
+  const file = new File(directory, fileName);
+  return { ...page, file: fileName, modifiedAt: file.modificationTime ?? page.modifiedAt };
+}
+
+/**
+ * 並べ替え後の ID がノートの全ページと過不足なく一致するか。
+ * ずれは呼び出し側の誤りなので AppError にしない
+ */
+function assertSamePageSet(manifest: NoteManifest, orderedPageIds: PageId[]): void {
+  const currentPageIds = new Set(manifest.pages.map((page) => page.id));
   const isSameSet =
     orderedPageIds.length === currentPageIds.size &&
     new Set(orderedPageIds).size === currentPageIds.size &&
     orderedPageIds.every((id) => currentPageIds.has(id));
   if (!isSameSet) {
-    throw new Error(`並べ替えるページがノート ${noteId} のページと一致しません`);
+    throw new Error(`並べ替えるページがノート ${manifest.id} のページと一致しません`);
   }
-}
-
-/** 消すページを除いた、現在の順番のページ ID */
-async function listRemainingPageIds(
-  db: Db,
-  noteId: NoteId,
-  deletingPageId: PageId,
-): Promise<PageId[]> {
-  const pages = await listPagesOfNote(db, noteId);
-  return pages.map((page) => page.id).filter((id) => id !== deletingPageId);
-}
-
-/** 抜けた番号を残さないよう、残りのページの position を 0 から詰め直す */
-async function deletePageAndCompactPositions(
-  db: Db,
-  noteId: NoteId,
-  pageId: PageId,
-  remainingPageIds: PageId[],
-): Promise<void> {
-  const now = new Date().toISOString();
-  await deletePageRow(db, pageId);
-  await updatePagePositions(db, noteId, remainingPageIds, now);
-  await markNoteUpdated(db, noteId, now);
 }

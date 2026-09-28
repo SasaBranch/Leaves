@@ -22,11 +22,22 @@ export type ShelfContextValue = {
   shelf: OpenShelf;
   /** 別の本棚を開く。null は本棚がなくなったとき（本棚の作成画面に戻る） */
   switchShelf(target: Shelf | null): Promise<void>;
+  /**
+   * 開いている本棚を閉じてから work を行い、work が返す本棚を開き直す（場所の移動など、本棚フォルダを入れ替える操作）。
+   * work が失敗したら同じ本棚を開き直して、例外を投げ直す
+   */
+  reopenShelfAfter(work: () => Promise<Shelf>): Promise<void>;
 };
 
 const ShelfContext = createContext<ShelfContextValue | null>(null);
 
-export function ShelfProvider({ value, children }: { value: ShelfContextValue; children: ReactNode }) {
+export function ShelfProvider({
+  value,
+  children,
+}: {
+  value: ShelfContextValue;
+  children: ReactNode;
+}) {
   return <ShelfContext.Provider value={value}>{children}</ShelfContext.Provider>;
 }
 

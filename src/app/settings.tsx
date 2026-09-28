@@ -1,25 +1,41 @@
 // SC-10 設定（基本設計書 4.3）。本棚の管理と、保存場所の案内だけを置く
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { Check, Ellipsis, Plus, X } from 'lucide-react-native';
+import type { Directory } from 'expo-file-system';
+import { Check, Ellipsis, FolderOpen, Plus, X } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { isAppError } from '@/domain/errors';
+import { validateName } from '@/domain/name';
 import type { Shelf } from '@/domain/types';
 import { useShelves } from '@/hooks/useShelves';
+import { pickFolder } from '@/native/folderAccess';
 import {
   countShelfContents,
   createShelf,
   deleteShelfWithContents,
+  moveShelf,
+  openFolderAsShelf,
+  removeShelfFromList,
   renameShelf,
 } from '@/services/shelves';
+import { entryName } from '@/storage/paths';
 import { useShelfContext } from '@/state/openShelf';
 import { useTheme } from '@/theme/useTheme';
 import { ActionMenu, type ActionMenuItem } from '@/ui/components/ActionMenu';
 import { TextPromptModal } from '@/ui/components/TextPromptModal';
 import { errorMessages } from '@/ui/errorMessages';
+import { canUseOtherLocations, shelfLocationLabels } from '@/ui/shelfLocations';
 import { showingErrors } from '@/ui/showingErrors';
 
 type Menu = { title: string; items: ActionMenuItem[] };
@@ -31,45 +47,109 @@ type Prompt = {
 };
 
 export default function SettingsScreen() {
-  const { shelf: openShelf, switchShelf } = useShelfContext();
+  const { shelf: openShelf, switchShelf, reopenShelfAfter } = useShelfContext();
   const { shelves, reload } = useShelves();
   const { colors, fonts } = useTheme();
   const [menu, setMenu] = useState<Menu | null>(null);
   const [prompt, setPrompt] = useState<Prompt | null>(null);
+  const [isMoving, setIsMoving] = useState(false);
 
   // 切り替えると画面の木ごと作り直される（ライブラリに戻る）ため、ここで画面を閉じる必要はない
   const selectShelf = (shelf: Shelf) => {
-    if (shelf.id === openShelf.id) router.back();
+    // 開けない本棚は開こうとせず、選び直すか外すかを選んでもらう（FR-L-04）
+    if (!shelf.available) openUnavailableShelfMenu(shelf);
+    else if (shelf.id === openShelf.id) router.back();
     else switchShelf(shelf).catch(alertFailure('本棚を開けませんでした'));
   };
 
-  const openCreateShelf = () =>
+  const openCreateShelf = () => {
+    if (!canUseOtherLocations) {
+      promptNewShelf(false);
+      return;
+    }
+    setMenu({
+      title: '新しい本棚',
+      items: [
+        { label: 'アプリ内に作る', onPress: () => promptNewShelf(false) },
+        { label: '別の場所に作る…', onPress: () => promptNewShelf(true) },
+      ],
+    });
+  };
+
+  /** 別の場所なら、名前を決めてからフォルダを選ぶ（フォルダ選択画面から戻った直後に入力欄を出さないため） */
+  const promptNewShelf = (inOtherLocation: boolean) =>
     setPrompt({
       title: '新しい本棚',
-      submitLabel: '作成',
+      submitLabel: inOtherLocation ? '場所を選んで作成' : '作成',
       onSubmit: showingErrors(async (name) => {
-        const created = createShelf(name);
-        await switchShelf(created);
+        let parent: Directory | null = null;
+        if (inOtherLocation) {
+          // 名前の誤りは、フォルダを選ぶ前に知らせる
+          validateName(name);
+          parent = await pickFolder();
+          if (!parent) return;
+        }
+        await switchShelf(createShelf(name, parent));
       }),
     });
 
-  const openShelfMenu = (shelf: Shelf) =>
+  const openFolderAsShelfAndSwitch = async () => {
+    const folder = await pickFolder();
+    if (!folder) return;
+    const shelf = openFolderAsShelf(folder);
+    if (shelf.id === openShelf.id) reload();
+    else await switchShelf(shelf);
+  };
+
+  const openShelfMenu = (shelf: Shelf) => {
+    if (!shelf.available) {
+      openUnavailableShelfMenu(shelf);
+      return;
+    }
+    const items: ActionMenuItem[] = [
+      {
+        label: '名前を変更',
+        onPress: () =>
+          setPrompt({
+            title: '本棚の名前',
+            initialValue: shelf.name,
+            submitLabel: '変更',
+            onSubmit: showingErrors((name) => rename(shelf, name)),
+          }),
+      },
+    ];
+    if (canUseOtherLocations) {
+      items.push({
+        label: '場所を移す',
+        onPress: () => chooseMoveDestination(shelf).catch(alertFailure('本棚を移せませんでした')),
+      });
+      if (shelf.location !== 'app') {
+        items.push({ label: '一覧から外す', onPress: () => confirmRemoveFromList(shelf) });
+      }
+    }
+    items.push({ label: '削除', destructive: true, onPress: () => confirmDelete(shelf) });
+    setMenu({ title: shelf.name, items });
+  };
+
+  const openUnavailableShelfMenu = (shelf: Shelf) =>
     setMenu({
-      title: shelf.name,
+      title: `「${shelf.name}」を開けません`,
       items: [
         {
-          label: '名前を変更',
-          onPress: () =>
-            setPrompt({
-              title: '本棚の名前',
-              initialValue: shelf.name,
-              submitLabel: '変更',
-              onSubmit: showingErrors((name) => rename(shelf, name)),
-            }),
+          label: '場所を選び直す',
+          onPress: () => relocate().catch(alertFailure('本棚を開けませんでした')),
         },
-        { label: '削除', destructive: true, onPress: () => confirmDelete(shelf) },
+        { label: '一覧から外す', onPress: () => confirmRemoveFromList(shelf) },
       ],
     });
+
+  /** 同じ本棚のフォルダを選べば同じ本棚として参照を新しくし、別のフォルダなら別の本棚として加わる（FR-L-04） */
+  async function relocate() {
+    const folder = await pickFolder();
+    if (!folder) return;
+    openFolderAsShelf(folder);
+    reload();
+  }
 
   async function rename(shelf: Shelf, name: string) {
     if (shelf.id !== openShelf.id) {
@@ -85,6 +165,64 @@ export default function SettingsScreen() {
     // （古い名前のまま次の操作をすると、もうないフォルダを探して失敗するため）
     reload();
   }
+
+  async function chooseMoveDestination(shelf: Shelf) {
+    const destination = await pickFolder();
+    if (!destination) return;
+    const contents = await countShelfContents(shelf, openShelf);
+    Alert.alert(
+      `「${shelf.name}」を移しますか？`,
+      `本棚「${shelf.name}」を「${entryName(destination)}」に移します（ノート ${contents.notes} 件）`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '移す',
+          onPress: () => move(shelf, destination).catch(alertFailure('本棚を移せませんでした')),
+        },
+      ],
+    );
+  }
+
+  /** 失敗しても元の場所に残る（moveShelf）。一覧を読み直して、今の場所を表示する */
+  async function move(shelf: Shelf, destination: Directory) {
+    setIsMoving(true);
+    try {
+      // 開いている本棚は、OCR・保存が本棚フォルダに書かないよう閉じてから移し、移した先で開き直す
+      if (shelf.id === openShelf.id) await reopenShelfAfter(() => moveShelf(shelf, destination));
+      else await moveShelf(shelf, destination);
+    } finally {
+      setIsMoving(false);
+      reload();
+    }
+  }
+
+  function confirmRemoveFromList(shelf: Shelf) {
+    Alert.alert(
+      `「${shelf.name}」を一覧から外しますか？`,
+      `本棚「${shelf.name}」を一覧から外します。フォルダは消えません。もう一度使うときは「フォルダを本棚として開く」から開けます`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '外す',
+          onPress: () => removeFromList(shelf).catch(alertFailure('一覧から外せませんでした')),
+        },
+      ],
+    );
+  }
+
+  async function removeFromList(shelf: Shelf) {
+    if (shelf.id !== openShelf.id) {
+      removeShelfFromList(shelf);
+      reload();
+      return;
+    }
+    // 開いている本棚は、先に別の本棚へ切り替えて（DB を閉じて）から外す。残りがなければ本棚の作成画面に戻る
+    await switchShelf(firstOtherAvailableShelf(shelf));
+    removeShelfFromList(shelf);
+  }
+
+  const firstOtherAvailableShelf = (shelf: Shelf) =>
+    shelves.find((candidate) => candidate.id !== shelf.id && candidate.available) ?? null;
 
   /** 中身の件数を示してから確認する（FR-V-05。ゴミ箱がないため） */
   async function confirmDelete(shelf: Shelf) {
@@ -111,8 +249,7 @@ export default function SettingsScreen() {
     }
     // 開いている本棚は、先に別の本棚へ切り替えて（DB を閉じて）から消す。
     // 残りがなければ null で本棚の作成画面に戻る（基本設計書 4.3 SC-10）
-    const next = shelves.find((candidate) => candidate.id !== shelf.id) ?? null;
-    await switchShelf(next);
+    await switchShelf(firstOtherAvailableShelf(shelf));
     deleteShelfWithContents(shelf);
   }
 
@@ -144,12 +281,34 @@ export default function SettingsScreen() {
                 <View style={styles.checkSlot}>
                   {shelf.id === openShelf.id ? <Check size={20} color={colors.accentText} /> : null}
                 </View>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.rowText, { color: colors.text, fontFamily: fonts.medium }]}
-                >
-                  {shelf.name}
-                </Text>
+                <View style={styles.rowTexts}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.rowText, { color: colors.text, fontFamily: fonts.medium }]}
+                  >
+                    {shelf.name}
+                  </Text>
+                  {/* Android はアプリ内の本棚だけなので、場所を出しても区別にならない（ADR 0026） */}
+                  {!shelf.available ? (
+                    <Text
+                      style={[
+                        styles.rowSubText,
+                        { color: colors.danger, fontFamily: fonts.medium },
+                      ]}
+                    >
+                      開けません
+                    </Text>
+                  ) : canUseOtherLocations ? (
+                    <Text
+                      style={[
+                        styles.rowSubText,
+                        { color: colors.muted, fontFamily: fonts.regular },
+                      ]}
+                    >
+                      {shelfLocationLabels[shelf.location]}
+                    </Text>
+                  ) : null}
+                </View>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -173,17 +332,46 @@ export default function SettingsScreen() {
               新しい本棚
             </Text>
           </Pressable>
+          {canUseOtherLocations ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() =>
+                openFolderAsShelfAndSwitch().catch(
+                  alertFailure('フォルダを本棚として開けませんでした'),
+                )
+              }
+              style={[styles.row, styles.rowMain, { borderColor: colors.border }]}
+            >
+              <View style={styles.checkSlot}>
+                <FolderOpen size={20} color={colors.accentText} />
+              </View>
+              <Text
+                style={[styles.rowText, { color: colors.accentText, fontFamily: fonts.medium }]}
+              >
+                フォルダを本棚として開く
+              </Text>
+            </Pressable>
+          ) : null}
         </Section>
 
         <Section title="保存場所">
-          <View style={styles.textBlock}>
-            <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}>
-              「ファイル」アプリ {'>'} このiPhone内 {'>'} Leaves
-            </Text>
-            <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 13 }}>
-              Mac とケーブルでつなぐと Finder からも開けます
-            </Text>
-          </View>
+          {canUseOtherLocations ? (
+            <View style={styles.textBlock}>
+              <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}>
+                アプリ内の本棚は「ファイル」アプリ {'>'} このiPhone内 {'>'} Leaves にあります
+              </Text>
+              <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 13 }}>
+                Mac とケーブルでつなぐと Finder からも開けます
+              </Text>
+            </View>
+          ) : (
+            // Android のアプリ内の本棚は外から見えない（ADR 0026）
+            <View style={styles.textBlock}>
+              <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}>
+                本棚はアプリの中に保存されます
+              </Text>
+            </View>
+          )}
         </Section>
 
         <Section title="情報">
@@ -212,6 +400,17 @@ export default function SettingsScreen() {
         onSubmit={prompt?.onSubmit ?? (async () => {})}
         onClose={() => setPrompt(null)}
       />
+      {isMoving ? (
+        // 移動中は操作を止める（途中で本棚を切り替えたり消したりしないように）
+        <View accessibilityViewIsModal style={[StyleSheet.absoluteFill, styles.overlay]}>
+          <View style={[styles.overlayCard, { backgroundColor: colors.surface }]}>
+            <ActivityIndicator color={colors.accentText} />
+            <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}>
+              移動中…
+            </Text>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -261,6 +460,17 @@ const styles = StyleSheet.create({
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', minHeight: 52 },
   checkSlot: { width: 44, alignItems: 'center' },
   rowText: { flex: 1, fontSize: 16 },
+  rowTexts: { flex: 1, paddingVertical: 6, gap: 2 },
+  rowSubText: { fontSize: 12 },
   textBlock: { padding: 14, gap: 6 },
   infoRow: { justifyContent: 'space-between', paddingHorizontal: 14 },
+  overlay: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
+  overlayCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    borderRadius: 14,
+  },
 });

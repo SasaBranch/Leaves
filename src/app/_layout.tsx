@@ -8,7 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import type { Shelf } from '@/domain/types';
 import { useSyncOnForeground } from '@/hooks/useSyncOnForeground';
-import { closeShelf, openShelf } from '@/services/shelves';
+import { closeShelf, listShelves, openShelf } from '@/services/shelves';
 import { openInitialShelf, runShelfMaintenance } from '@/services/startup';
 import { type OpenShelf, ShelfProvider } from '@/state/openShelf';
 import { appFonts } from '@/theme/fonts';
@@ -30,7 +30,7 @@ const MODAL_SCREENS = [
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(appFonts);
-  const { shelf, switchShelf } = useOpenShelf();
+  const { shelf, switchShelf, reopenShelfAfter, isReopening } = useOpenShelf();
   const { colors, isDark } = useTheme();
   const isReady = (fontsLoaded || fontError) && shelf !== undefined;
 
@@ -48,8 +48,9 @@ export default function RootLayout() {
         // 本棚がないときの入口。戻る先がないため、ルートではなく部品として出す（詳細設計書 9.6）
         <WelcomeScreen onCreated={switchShelf} />
       ) : (
-        <ShelfProvider value={{ shelf, switchShelf }}>
-          <SyncOnForeground shelf={shelf} switchShelf={switchShelf} />
+        <ShelfProvider value={{ shelf, switchShelf, reopenShelfAfter }}>
+          {/* 閉じている間に反映すると、移動の途中の本棚を「削除された」とみなしてしまうため止める */}
+          {isReopening ? null : <SyncOnForeground shelf={shelf} switchShelf={switchShelf} />}
           {/* 本棚を切り替えたら画面の木を作り直す（前の本棚のデータを持った画面を残さないため。詳細設計書 4.4） */}
           <Stack
             key={shelf.id}
@@ -82,6 +83,7 @@ function SyncOnForeground({
  */
 function useOpenShelf() {
   const [shelf, setShelf] = useState<OpenShelf | null | undefined>(undefined);
+  const [isReopening, setIsReopening] = useState(false);
 
   useEffect(() => {
     openInitialShelf().then(
@@ -98,12 +100,40 @@ function useOpenShelf() {
 
   async function switchShelf(target: Shelf | null): Promise<void> {
     if (shelf) await closeShelf(shelf);
+    await open(target);
+  }
+
+  async function reopenShelfAfter(work: () => Promise<Shelf>): Promise<void> {
+    if (!shelf) return;
+    setIsReopening(true);
+    try {
+      await closeShelf(shelf);
+      let next: Shelf;
+      try {
+        next = await work();
+      } catch (error) {
+        await open(shelfAfterFailedWork(shelf));
+        throw error;
+      }
+      await open(next);
+    } finally {
+      setIsReopening(false);
+    }
+  }
+
+  async function open(target: Shelf | null): Promise<void> {
     const opened = target ? await openShelf(target) : null;
     setShelf(opened);
     if (opened) startMaintenance(opened);
   }
 
-  return { shelf, switchShelf };
+  return { shelf, switchShelf, reopenShelfAfter, isReopening };
+}
+
+/** 失敗しても元の本棚は残る前提（moveShelf）。見つからなければ開ける本棚、なければ null（本棚の作成画面） */
+function shelfAfterFailedWork(closed: OpenShelf): Shelf | null {
+  const shelves = listShelves().filter((candidate) => candidate.available);
+  return shelves.find((candidate) => candidate.id === closed.id) ?? shelves[0] ?? null;
 }
 
 function startMaintenance(shelf: OpenShelf): void {

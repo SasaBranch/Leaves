@@ -1,0 +1,8 @@
+expo.modules.pageimageeditor.page-image-editor-exifinterface-1.4.1-0 /Users/kohei/.gradle/caches/9.3.1/transforms/048d593c9d6133c7df77ccbcdccdcb23/transformed/exifinterface-1.4.1/res
+expo.modules.pageimageeditor.page-image-editor-pngs-1 /Users/kohei/Documents/workspace/Leaves/modules/page-image-editor/android/build/generated/res/pngs/release
+expo.modules.pageimageeditor.page-image-editor-resValues-2 /Users/kohei/Documents/workspace/Leaves/modules/page-image-editor/android/build/generated/res/resValues/release
+expo.modules.pageimageeditor.page-image-editor-mergeReleaseResources-3 /Users/kohei/Documents/workspace/Leaves/modules/page-image-editor/android/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
+expo.modules.pageimageeditor.page-image-editor-mergeReleaseResources-4 /Users/kohei/Documents/workspace/Leaves/modules/page-image-editor/android/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
+expo.modules.pageimageeditor.page-image-editor-release-5 /Users/kohei/Documents/workspace/Leaves/modules/page-image-editor/android/build/intermediates/merged_res/release/mergeReleaseResources
+expo.modules.pageimageeditor.page-image-editor-main-6 /Users/kohei/Documents/workspace/Leaves/modules/page-image-editor/android/src/main/res
+expo.modules.pageimageeditor.page-image-editor-release-7 /Users/kohei/Documents/workspace/Leaves/modules/page-image-editor/android/src/release/res

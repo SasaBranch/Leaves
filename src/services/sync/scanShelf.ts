@@ -1,6 +1,7 @@
 // 本棚フォルダを読み、今の状態（ノートブック・ノート・変わったノートのページ）を得る（詳細設計書 9.9）。
 // 前回の走査時から更新日時が変わっていないフォルダは中身を読まず、DB の記録を使う（ADR 0020・0021）。
 import { Directory, File } from 'expo-file-system';
+import { Platform } from 'react-native';
 
 import { NOTEBOOK_COLORS, SYNC_YIELD_EVERY_FOLDERS } from '@/config';
 import type { IndexedNote, IndexedNotebook, IndexSnapshot } from '@/db/indexRepository';
@@ -333,10 +334,12 @@ function pickColor(context: Context, parentId: NotebookId | null): NotebookColor
 }
 
 /**
- * フォルダの更新日時（ミリ秒）。Directory.info() は中の全ファイルのサイズを合計して遅いため、
- * File として読む（ADR 0021）
+ * フォルダの更新日時（ミリ秒）。iOS の Directory.info() は中の全ファイルのサイズを合計して遅いため、
+ * File として読む（ADR 0021）。Android はフォルダを File として開けないため info() を使う
+ * （Android はエミュレータでの確認で、性能は参考値とした。要件定義書 Q-11）
  */
 export function folderModifiedAt(folder: Directory): number {
+  if (Platform.OS === 'android') return folder.info().modificationTime ?? 0;
   return new File(folder.uri).modificationTime ?? 0;
 }
 

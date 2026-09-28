@@ -868,7 +868,7 @@ export async function syncShelf(shelf: OpenShelf): Promise<void> {
 
 **差分（`diffIndex`、純粋関数）**: 走査結果と DB を ID で比べ、`{ upsertedNotebooks, upsertedNotes, replacedPagesByNote, deletedNotebookIds, deletedNoteIds, removedPageIds, pendingPageIds }` を返す。DB で `processing` のページは、`.leaves.json` が `pending` でも `processing` のままにする（認識中の結果を上書きしないため）。
 
-- フォルダの更新日時は `new File(フォルダの uri).modificationTime` で読む（`Directory.info()` は中の全ファイルのサイズを合計するため遅い。ADR 0021）。中の追加・削除・名前変更で変わる（R-6）
+- フォルダの更新日時は `new File(フォルダの uri).modificationTime` で読む（`Directory.info()` は中の全ファイルのサイズを合計するため遅い。ADR 0021）。中の追加・削除・名前変更で変わる（R-6）。Android はフォルダを File として開けないため `Directory.info().modificationTime` を使う（Android はエミュレータでの確認で、性能は参考値。要件定義書 Q-11）
 - ファイルシステムから得た名前は `normalize('NFC')` してから使う（`list()` は NFD を返す。ADR 0021）
 - 走査は 50 フォルダごとに `await` して、画面の描画・操作に順番を譲る
 - アプリ自身の変更（9.1〜9.4）では `scanned_modified_at` を更新しない。変更したフォルダは次の反映で読み直されるが、結果は同じになる（ADR 0020）

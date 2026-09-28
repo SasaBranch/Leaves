@@ -1,6 +1,5 @@
 // SC-9 本棚の作成（初回。基本設計書 4.3）。
 // 本棚がないときだけルートレイアウトが出す。戻る先がないため、ルートではなく部品にしている（詳細設計書 9.6）
-import { Leaf } from 'lucide-react-native';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -18,7 +17,11 @@ import { isAppError } from '@/domain/errors';
 import type { Shelf } from '@/domain/types';
 import { createShelf } from '@/services/shelves';
 import { useTheme } from '@/theme/useTheme';
+import { LeavesMark } from '@/ui/components/LeavesMark';
 import { errorMessages } from '@/ui/errorMessages';
+
+/** ロゴの高さ。ワードマーク「Leaves」の大きさに合わせる */
+const LOGO_MARK_SIZE = 32;
 
 export function WelcomeScreen({ onCreated }: { onCreated: (shelf: Shelf) => Promise<void> }) {
   const { colors, fonts } = useTheme();
@@ -45,7 +48,7 @@ export function WelcomeScreen({ onCreated }: { onCreated: (shelf: Shelf) => Prom
         style={styles.body}
       >
         <View style={styles.logo}>
-          <Leaf size={30} color={colors.accentText} />
+          <LeavesMark size={LOGO_MARK_SIZE} />
           <Text style={[styles.logoText, { color: colors.text, fontFamily: fonts.logo }]}>
             Leaves
           </Text>

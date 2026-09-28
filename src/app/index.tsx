@@ -1,6 +1,6 @@
 // SC-1 ライブラリ（基本設計書 4.3）
 import { router } from 'expo-router';
-import { FolderPlus, Leaf, Search, Settings } from 'lucide-react-native';
+import { FolderPlus, Search, Settings } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,8 +14,12 @@ import { useShelf } from '@/state/openShelf';
 import { useTheme } from '@/theme/useTheme';
 import { ACTION_BAR_CLEARANCE, ActionBar } from '@/ui/components/ActionBar';
 import { CoverGrid } from '@/ui/components/CoverGrid';
+import { LeavesMark } from '@/ui/components/LeavesMark';
 import { NoteCover } from '@/ui/components/NoteCover';
 import { SortToggle } from '@/ui/components/SortToggle';
+
+/** ヘッダーのロゴの高さ。ワードマーク「Leaves」の大きさに合わせる */
+const LOGO_MARK_SIZE = 28;
 
 /** 「最近のノート」の表紙の幅（横スクロール） */
 const RECENT_COVER_WIDTH = 112;
@@ -38,7 +42,7 @@ export default function LibraryScreen() {
             onLongPress={__DEV__ ? () => confirmSeedTestData(shelf) : undefined}
             style={styles.logo}
           >
-            <Leaf size={26} color={colors.accentText} />
+            <LeavesMark size={LOGO_MARK_SIZE} />
             <Text style={[styles.logoText, { color: colors.text, fontFamily: fonts.logo }]}>
               Leaves
             </Text>

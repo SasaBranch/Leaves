@@ -2,7 +2,8 @@
 """アプリアイコン・起動画面の画像を作る（二枚葉のアイコン。2026-09-28 に利用者と決定した「C2」）。
 
 葉の形はここに書いた多角形の座標が正本。形を変えるときはこのファイルを直して、
-`python3 scripts/generate-icons.py` で assets/images/ の画像を作り直す。
+`python3 scripts/generate-icons.py` で assets/images/ の画像と、アプリ内でロゴを描くためのデータ
+（src/ui/components/leavesMarkShape.ts）を作り直す。
 
 座標は 180×180 の枠（中心が原点）で考える。Obsidian のロゴのように、平面の面を組み合わせて
 宝石のような立体感を出し、光の当たる左上を明るく、右下を暗くしている。
@@ -12,7 +13,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-OUT = Path(__file__).resolve().parent.parent / 'assets' / 'images'
+ROOT = Path(__file__).resolve().parent.parent
+OUT = ROOT / 'assets' / 'images'
+SHAPE_MODULE = ROOT / 'src' / 'ui' / 'components' / 'leavesMarkShape.ts'
 SIZE = 1024
 # 縁を滑らかにするため、大きく描いてから縮める倍率
 SUPERSAMPLE = 4
@@ -89,6 +92,31 @@ def grayscale(color):
     return (level, level, level, 255)
 
 
+def write_shape_module():
+    """アプリ内のロゴ（LeavesMark）用に、葉の外枠に合わせた座標と、面ごとの明るさの順位を書き出す"""
+    polygons = leaf_polygons()
+    xs = [x for points, _ in polygons for x, _ in points]
+    ys = [y for points, _ in polygons for _, y in points]
+    left, top = min(xs), min(ys)
+    width, height = max(xs) - left, max(ys) - top
+    colors = sorted({color for _, color in polygons}, key=lambda c: -sum(int(c[i:i + 2], 16) for i in (1, 3, 5)))
+    lines = [
+        '// scripts/generate-icons.py が生成するファイル。手で書き換えない（形の正本はスクリプトの座標）',
+        '// アプリ内のロゴ（LeavesMark）の面。座標は葉の外枠を (0, 0)〜(width, height) とする',
+        f'export const LEAVES_MARK_SIZE = {{ width: {width:.2f}, height: {height:.2f} }};',
+        '',
+        '/** brightness: 面の明るさ（1 がいちばん明るい）。単色で描くときの濃淡に使う */',
+        'export const LEAVES_MARK_FACETS: { points: string; color: string; brightness: number }[] = [',
+    ]
+    for points, color in polygons:
+        text = ' '.join(f'{x - left:.2f},{y - top:.2f}' for x, y in points)
+        brightness = 1 - colors.index(color) / (len(colors) - 1)
+        lines.append(f"  {{ points: '{text}', color: '{color}', brightness: {brightness:.2f} }},")
+    lines.append('];')
+    SHAPE_MODULE.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+    print(f'wrote {SHAPE_MODULE}')
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     transparent = (0, 0, 0, 0)
@@ -107,6 +135,7 @@ def main():
     for name, image in outputs.items():
         image.save(OUT / name)
         print(f'wrote {OUT / name}')
+    write_shape_module()
 
 
 if __name__ == '__main__':

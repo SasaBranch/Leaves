@@ -1,11 +1,14 @@
 // ノートブック表紙（基本設計書 2.4）: フォルダではなく、色付き表紙に紙が重なった冊子として見せる
-import { Leaf } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { NotebookSummary } from '@/domain/types';
 import { useTheme } from '@/theme/useTheme';
 
 import { COVER_ASPECT_RATIO, NotebookSpine } from './coverShape';
+import { LeavesMark } from './LeavesMark';
+
+/** 表紙の右下のロゴの高さ */
+const COVER_MARK_SIZE = 18;
 
 /** 背表紙の幅 */
 const COVER_SPINE_WIDTH = 9;
@@ -66,7 +69,9 @@ export function NotebookCover({
               {notebook.name}
             </Text>
           </View>
-          <Leaf size={18} color="rgba(255,255,255,0.45)" style={styles.leaf} />
+          <View style={styles.leaf}>
+            <LeavesMark size={COVER_MARK_SIZE} monochrome="#FFFFFF" />
+          </View>
         </View>
       </View>
       <Text
@@ -106,7 +111,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.92)',
   },
   labelText: { color: '#1D2A22', fontSize: 11, textAlign: 'center' },
-  leaf: { position: 'absolute', right: 10, bottom: 10 },
+  // 表紙の色の上で主張しすぎないよう、白の濃淡を全体に薄くする
+  leaf: { position: 'absolute', right: 10, bottom: 10, opacity: 0.5 },
   title: { marginTop: 9, fontSize: 13 },
   meta: { marginTop: 2, fontSize: 11 },
 });

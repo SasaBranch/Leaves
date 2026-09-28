@@ -19,7 +19,14 @@ import { WelcomeScreen } from '@/ui/components/WelcomeScreen';
 SplashScreen.preventAutoHideAsync();
 
 /** 基本設計書 4.1 でモーダル表示と決めた画面 */
-const MODAL_SCREENS = ['capture', 'search', 'move', 'settings', 'note/[id]/reorder'];
+const MODAL_SCREENS = [
+  'capture',
+  'search',
+  'move',
+  'settings',
+  'note/[id]/reorder',
+  'note/[id]/edit',
+];
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(appFonts);

@@ -9,7 +9,8 @@ import type { NoteId, PageId } from '@/domain/types';
 import { notifyDataChanged } from '@/state/dataChanges';
 import type { OpenShelf } from '@/state/openShelf';
 import { writeManifest, type PageManifest } from '@/storage/manifest';
-import { regenerateThumbnail } from '@/storage/pageImages';
+import { deleteQuietly, regenerateThumbnail } from '@/storage/pageImages';
+import { originalImageFile } from '@/storage/paths';
 
 import { getNoteWithDirectory, readNoteManifest } from '../folders';
 import { enqueueOcr } from '../ocrQueue';
@@ -37,7 +38,10 @@ export async function refreshReplacedPages(shelf: OpenShelf, noteId: NoteId): Pr
         ocrStatus: 'pending',
         ocrText: '',
         ocrLines: [],
+        // 上書きされた画像を新しい元の画像とみなし、以前の編集は捨てる（詳細設計書 9.12）
+        edit: null,
       });
+      deleteQuietly(originalImageFile(directory, page.id));
       replacedIds.push(page.id);
     }
     if (replacedIds.length === 0) return replacedIds;

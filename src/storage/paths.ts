@@ -43,6 +43,14 @@ export const thumbnailFile = (shelfId: ShelfId, pageId: PageId) =>
 
 export const manifestFile = (directory: Directory) => new File(directory, MANIFEST_FILE_NAME);
 
+/**
+ * 編集したページの元の画像（FR-N-12）。ページ ID で結びつけるため、並べ替え（ファイル名の付け直し）や
+ * ノートの名前変更・移動の影響を受けない。. で始まるため走査の対象にならない
+ */
+export const originalsDirectory = (note: Directory) => new Directory(note, '.originals');
+export const originalImageFile = (note: Directory, pageId: PageId) =>
+  new File(originalsDirectory(note), `${pageId}${PAGE_IMAGE_EXTENSION}`);
+
 /** . で始まる名前はアプリの管理用とみなし、走査・一覧の対象から外す（基本設計書 5.4） */
 export const isHiddenEntryName = (name: string) => name.startsWith('.');
 

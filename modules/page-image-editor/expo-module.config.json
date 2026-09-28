@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PageImageEditorModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.pageimageeditor.PageImageEditorModule"]
+  }
+}

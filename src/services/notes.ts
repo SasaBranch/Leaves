@@ -21,7 +21,8 @@ import type { NoteId, NotebookId, PageId } from '@/domain/types';
 import { notifyDataChanged } from '@/state/dataChanges';
 import type { OpenShelf } from '@/state/openShelf';
 import type { NoteManifest, PageManifest } from '@/storage/manifest';
-import { deleteThumbnails, renumberPageFiles } from '@/storage/pageImages';
+import { deleteQuietly, deleteThumbnails, renumberPageFiles } from '@/storage/pageImages';
+import { originalImageFile } from '@/storage/paths';
 
 import {
   getNoteWithDirectory,
@@ -104,6 +105,7 @@ export async function deletePage(
     const rest = pages.filter((entry) => entry.id !== pageId);
     if (rest.length === 0) return rest;
     if (deleting) new File(directory, deleting.file).delete();
+    deleteQuietly(originalImageFile(directory, pageId));
     await rewritePages(shelf.db, directory, page.noteId, rest, pageId);
     deleteThumbnails(shelf.id, [pageId]);
     return rest;

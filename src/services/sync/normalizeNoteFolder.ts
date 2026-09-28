@@ -6,7 +6,13 @@ import { SUPPORTED_IMAGE_EXTENSIONS } from '@/config';
 import type { IsoDateTime, ShelfId } from '@/domain/types';
 import { writeManifest, type NoteManifest, type PageManifest } from '@/storage/manifest';
 import { importExternalImage, renumberPageFiles } from '@/storage/pageImages';
-import { entryName, isHiddenEntryName, pageFileName } from '@/storage/paths';
+import {
+  entryName,
+  isHiddenEntryName,
+  originalImageFile,
+  originalsDirectory,
+  pageFileName,
+} from '@/storage/paths';
 
 /** 番号の付け直しの途中で終了したときの仮の名前（storage/pageImages の renumberPageFiles） */
 const RENUMBERING_NAME = /^\.renumber-(\d+)$/;
@@ -81,7 +87,20 @@ export async function normalizeNoteFolder(
     pages: normalized,
   };
   if (JSON.stringify(result) !== JSON.stringify(manifest)) writeManifest(directory, result);
+  removeUnusedOriginals(directory, result.pages);
   return result;
+}
+
+/** 消えたページ・編集していないページの元の画像（.originals/）を消す（詳細設計書 9.12） */
+function removeUnusedOriginals(directory: Directory, pages: PageManifest[]): void {
+  const originals = originalsDirectory(directory);
+  if (!originals.exists) return;
+  const editedFiles = new Set(
+    pages.filter((page) => page.edit).map((page) => originalImageFile(directory, page.id).name),
+  );
+  for (const entry of originals.list()) {
+    if (!editedFiles.has(entry.name)) entry.delete();
+  }
 }
 
 function listPageImages(directory: Directory): ImageInFolder[] {

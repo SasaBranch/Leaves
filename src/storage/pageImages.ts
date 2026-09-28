@@ -127,7 +127,7 @@ export function describeStoredPage(
   };
 }
 
-async function readImageSize(uri: string): Promise<{ width: number; height: number }> {
+export async function readImageSize(uri: string): Promise<{ width: number; height: number }> {
   const image = await ImageManipulator.manipulate(uri).renderAsync();
   return { width: image.width, height: image.height };
 }
@@ -189,7 +189,8 @@ export function discardCapturedImages(images: CapturedImage[]): void {
   for (const image of images) deleteQuietly(new File(image.uri));
 }
 
-function deleteQuietly(file: File): void {
+/** 消せなくても利用者の操作は失敗させない（容量を少し使うだけのため） */
+export function deleteQuietly(file: File): void {
   try {
     if (file.exists) file.delete();
   } catch (error) {

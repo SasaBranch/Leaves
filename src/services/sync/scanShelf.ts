@@ -16,7 +16,7 @@ import {
   type PageManifest,
 } from '@/storage/manifest';
 import { importExternalImage } from '@/storage/pageImages';
-import { entryName, isHiddenEntryName, pageFileName } from '@/storage/paths';
+import { entryName, isHiddenEntryName, originalImageFile, pageFileName } from '@/storage/paths';
 
 import { isSupportedImageName, normalizeNoteFolder } from './normalizeNoteFolder';
 
@@ -190,7 +190,7 @@ async function visitNoteFolder(
   manifest: NoteManifest,
 ): Promise<void> {
   // 同じ ID が2か所にある（Finder で複製した）: 後から見つかった方に新しい ID を振る。OCR 結果は引き継ぐ
-  const note = context.seenIds.has(manifest.id) ? withNewIds(manifest) : manifest;
+  const note = context.seenIds.has(manifest.id) ? withNewIds(manifest, folder) : manifest;
   context.seenIds.add(note.id);
   const indexed = context.index.notes.find((candidate) => candidate.id === note.id);
   if (note === manifest && indexed?.scannedModifiedAt === modifiedAt) {
@@ -244,11 +244,17 @@ async function importLooseImage(
   });
 }
 
-function withNewIds(manifest: NoteManifest): NoteManifest {
+/** 複製されたノートに新しい ID を振る。編集したページの元の画像も、新しいページ ID の名前に付け直す */
+function withNewIds(manifest: NoteManifest, folder: Directory): NoteManifest {
   return {
     ...manifest,
     id: newNoteId() as NoteId,
-    pages: manifest.pages.map((page) => ({ ...page, id: newPageId() })),
+    pages: manifest.pages.map((page) => {
+      const id = newPageId();
+      const original = originalImageFile(folder, page.id);
+      if (page.edit && original.exists) original.rename(originalImageFile(folder, id).name);
+      return { ...page, id };
+    }),
   };
 }
 

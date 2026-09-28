@@ -1,0 +1,23 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.pageimageeditor'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.pageimageeditor"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // 外部で置かれた画像の EXIF の向きを読むため（expo-image-picker と同じ版）
+  implementation "androidx.exifinterface:exifinterface:1.4.1"
+}

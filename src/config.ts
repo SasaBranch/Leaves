@@ -59,3 +59,6 @@ export const SUPPORTED_IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.heic'];
  * ファイル操作は JS スレッドを止めるため、1,000 フォルダ（約1秒）を一度に走らせないようにする（ADR 0021）
  */
 export const SYNC_YIELD_EVERY_FOLDERS = 50;
+
+/** SC-11 の拡大鏡の倍率。四隅を紙の角に合わせやすくする（詳細設計書 9.12） */
+export const EDIT_MAGNIFIER_SCALE = 2;

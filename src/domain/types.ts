@@ -16,6 +16,13 @@ export type NotebookColor = (typeof NOTEBOOK_COLORS)[number];
 /** ノートブック・ノート一式の保存単位。Documents 直下の1フォルダ（基本設計書 5.4） */
 export type Shelf = { id: ShelfId; name: string };
 
+/** 画像に対する相対座標（0〜1） */
+export type Point = { x: number; y: number };
+/** 右回りの回転 */
+export type PageRotation = 0 | 90 | 180 | 270;
+/** ページの編集内容。四隅は元の画像（回転前）に対する相対座標で、左上・右上・右下・左下の順（詳細設計書 5.1） */
+export type PageEdit = { corners: [Point, Point, Point, Point]; rotation: PageRotation };
+
 export type Notebook = {
   id: NotebookId;
   /** null はライブラリ直下 */

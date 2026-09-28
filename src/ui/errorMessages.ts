@@ -10,5 +10,6 @@ export const errorMessages: Record<AppErrorKind, string> = {
   invalidMove: 'ノートブックを自分自身やその中には移動できません',
   storageFull: '端末の空き容量が不足しているため保存できませんでした',
   cameraPermissionDenied: 'カメラへのアクセスが許可されていません。設定アプリから許可してください',
+  pageEditFailed: 'ページを編集できませんでした',
   exportFailed: '書き出しに失敗しました。もう一度お試しください',
 };

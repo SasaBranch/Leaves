@@ -9,6 +9,7 @@ import {
   Camera,
   ChevronLeft,
   Copy,
+  Crop,
   FileText,
   FolderInput,
   Share,
@@ -163,6 +164,19 @@ export default function NoteScreen() {
             <ToolButton label="ページ追加" onPress={() => setOpenMenu('addPages')}>
               <Camera size={22} color={colors.text} />
             </ToolButton>
+            {currentPage ? (
+              <ToolButton
+                label="編集"
+                onPress={() =>
+                  router.push({
+                    pathname: '/note/[id]/edit',
+                    params: { id: noteId, page: currentPage.id },
+                  })
+                }
+              >
+                <Crop size={22} color={colors.text} />
+              </ToolButton>
+            ) : null}
             <ToolButton
               label="並べ替え"
               onPress={() =>

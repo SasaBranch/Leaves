@@ -9,6 +9,7 @@ import type {
   NotebookColor,
   NotebookId,
   OcrLine,
+  PageEdit,
   PageId,
   ShelfId,
 } from '@/domain/types';
@@ -44,6 +45,8 @@ export type PageManifest = {
   ocrText: string;
   ocrLines: OcrLine[];
   createdAt: IsoDateTime;
+  /** 編集したページだけ。あれば .originals/{id}.jpg に元の画像がある（詳細設計書 9.12） */
+  edit?: PageEdit | null;
 };
 
 export type NoteManifest = {
@@ -155,7 +158,18 @@ function isPageManifest(value: unknown): value is PageManifest {
     typeof value.ocrText === 'string' &&
     Array.isArray(value.ocrLines) &&
     value.ocrLines.every(isOcrLine) &&
-    isString(value.createdAt)
+    isString(value.createdAt) &&
+    (value.edit === undefined || value.edit === null || isPageEdit(value.edit))
+  );
+}
+
+function isPageEdit(value: unknown): value is PageEdit {
+  return (
+    isObject(value) &&
+    (value.rotation === 0 || value.rotation === 90 || value.rotation === 180 || value.rotation === 270) &&
+    Array.isArray(value.corners) &&
+    value.corners.length === 4 &&
+    value.corners.every((corner) => isObject(corner) && isNumber(corner.x) && isNumber(corner.y))
   );
 }
 

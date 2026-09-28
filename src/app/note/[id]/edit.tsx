@@ -39,8 +39,13 @@ import { storedImageSource } from '@/ui/imageSource';
 /** 四隅のハンドルの直径。指で掴みやすい大きさ（タップ領域 44pt 以上は hitSlop で確保） */
 const HANDLE_SIZE = 28;
 const HANDLE_HIT_SLOP = 12;
-/** ハンドルが画面の端で切れないよう、画像の周りに空ける余白 */
+/** ハンドルが画面の端で切れないよう、画像の周りに空ける余白（上下） */
 const STAGE_PADDING = 24;
+/**
+ * 左右の余白。画面の左右の端から指を動かすと「戻る」のジェスチャーになる
+ * （Android のジェスチャーナビゲーション、iOS の左端スワイプ）ため、ハンドルのタップ領域まで端から離す
+ */
+const STAGE_PADDING_HORIZONTAL = 48;
 /** 拡大鏡の直径と、指からずらす距離（指で隠れないように上に出す） */
 const MAGNIFIER_SIZE = 112;
 const MAGNIFIER_OFFSET = 80;
@@ -383,7 +388,7 @@ function RotatedImage({
 
 /** 余白を除いた舞台に、縦横比を保って画像を最大の大きさで置く位置 */
 function fitImage(stage: LayoutRectangle, aspectRatio: number): LayoutRectangle {
-  const maxWidth = stage.width - STAGE_PADDING * 2;
+  const maxWidth = stage.width - STAGE_PADDING_HORIZONTAL * 2;
   const maxHeight = stage.height - STAGE_PADDING * 2;
   const width = Math.min(maxWidth, maxHeight * aspectRatio);
   const height = width / aspectRatio;

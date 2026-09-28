@@ -8,7 +8,11 @@
     "scheme": "leaves",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": {
+        "light": "./assets/images/icon.png",
+        "dark": "./assets/images/ios-icon-dark.png",
+        "tinted": "./assets/images/ios-icon-tinted.png"
+      },
       "bundleIdentifier": "com.sasabranch.leaves",
       "infoPlist": {
         "UIFileSharingEnabled": true,
@@ -17,7 +21,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0E1310",
+        "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -32,7 +36,7 @@
         {
           "backgroundColor": "#0E1310",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 120
         }
       ],
       "expo-sqlite",

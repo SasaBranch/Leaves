@@ -49,7 +49,7 @@ export default function RootLayout() {
         <WelcomeScreen onCreated={switchShelf} />
       ) : (
         <ShelfProvider value={{ shelf, switchShelf }}>
-          <SyncOnForeground shelf={shelf} />
+          <SyncOnForeground shelf={shelf} switchShelf={switchShelf} />
           {/* 本棚を切り替えたら画面の木を作り直す（前の本棚のデータを持った画面を残さないため。詳細設計書 4.4） */}
           <Stack
             key={shelf.id}
@@ -65,8 +65,14 @@ export default function RootLayout() {
   );
 }
 
-function SyncOnForeground({ shelf }: { shelf: OpenShelf }) {
-  useSyncOnForeground(shelf);
+function SyncOnForeground({
+  shelf,
+  switchShelf,
+}: {
+  shelf: OpenShelf;
+  switchShelf: (target: Shelf | null) => Promise<void>;
+}) {
+  useSyncOnForeground(shelf, switchShelf);
   return null;
 }
 

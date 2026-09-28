@@ -29,14 +29,37 @@ import { stopOcrQueue } from './ocrQueue';
  * どの本棚にも対応しない内部データ（外部で本棚が削除された）は消す
  */
 export function listShelves(): Shelf[] {
-  const shelves = shelvesRootDirectory()
+  const shelves = scanShelfFolders();
+  removeOrphanInternalData(new Set(shelves.map((shelf) => shelf.id)));
+  return shelves;
+}
+
+export type OpenShelfLocation =
+  | { kind: 'unchanged' }
+  | { kind: 'renamed'; shelf: Shelf }
+  | { kind: 'deleted'; next: Shelf | null };
+
+/**
+ * 開いている本棚のフォルダが、外部（「ファイル」アプリ・Finder）で名前を変えられたり消されたりしていないか。
+ * 場所が変わっていれば同じ ID の本棚を、消えていれば次に開く本棚（なければ null）を返す（FR-X-04）。
+ * 開いている本棚の内部データ（索引 DB）はまだ使っているため、ここでは消さない
+ */
+export function locateOpenShelf(shelf: OpenShelf): OpenShelfLocation {
+  const manifest = shelf.directory.exists ? readManifest(shelf.directory) : null;
+  if (manifest?.kind === 'shelf' && manifest.id === shelf.id) return { kind: 'unchanged' };
+  const shelves = scanShelfFolders();
+  const moved = shelves.find((candidate) => candidate.id === shelf.id);
+  if (moved) return { kind: 'renamed', shelf: moved };
+  return { kind: 'deleted', next: shelves[0] ?? null };
+}
+
+function scanShelfFolders(): Shelf[] {
+  return shelvesRootDirectory()
     .list()
     .filter((entry): entry is Directory => entry instanceof Directory)
     .filter((directory) => !isHiddenEntryName(directory.name))
     .map((directory) => ({ id: ensureShelfManifest(directory), name: entryName(directory) }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  removeOrphanInternalData(new Set(shelves.map((shelf) => shelf.id)));
-  return shelves;
 }
 
 export function createShelf(name: string): Shelf {

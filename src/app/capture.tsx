@@ -2,7 +2,7 @@
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ChevronRight, Pencil, Plus, X } from 'lucide-react-native';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -30,7 +30,10 @@ type OpenDialog = 'title' | 'destination' | 'addPages' | null;
 export default function CaptureScreen() {
   const params = useLocalSearchParams<{ images: string; notebookId?: string; noteId?: string }>();
   const addingToNoteId = (params.noteId || null) as NoteId | null;
-  const [images, setImages] = useState(() => JSON.parse(params.images) as CapturedImage[]);
+  // 画像はスキャン・写真選択から URL のパラメータで渡される。リンクから直接開かれた場合などに
+  // 壊れた値で落ちないよう、読めなければ画面を閉じる
+  const [initialImages] = useState(() => parseCapturedImages(params.images));
+  const [images, setImages] = useState(initialImages ?? []);
   const [title, setTitle] = useState(() => formatDefaultNoteTitle(new Date()));
   const [notebookId, setNotebookId] = useState((params.notebookId || null) as NotebookId | null);
   const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
@@ -39,6 +42,10 @@ export default function CaptureScreen() {
   const { data: notebookPath } = useNotebookPath(notebookId);
   const shelf = useShelf();
   const { colors, fonts } = useTheme();
+
+  useEffect(() => {
+    if (!initialImages) router.back();
+  }, [initialImages]);
 
   async function save() {
     setIsSaving(true);
@@ -90,6 +97,8 @@ export default function CaptureScreen() {
   }
 
   const renameTitle = showingErrors((value) => setTitle(validateName(value)));
+
+  if (!initialImages) return null;
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.bg }]}>
@@ -213,6 +222,22 @@ export default function CaptureScreen() {
       </Modal>
     </SafeAreaView>
   );
+}
+
+/** URL のパラメータから取り込み画像を読む。1枚もない・形が違う場合は null */
+function parseCapturedImages(value: string | undefined): CapturedImage[] | null {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '');
+    const isImage = (item: unknown): item is CapturedImage =>
+      typeof item === 'object' &&
+      item !== null &&
+      typeof (item as CapturedImage).uri === 'string' &&
+      typeof (item as CapturedImage).width === 'number' &&
+      typeof (item as CapturedImage).height === 'number';
+    return Array.isArray(parsed) && parsed.length > 0 && parsed.every(isImage) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function PagePreview({

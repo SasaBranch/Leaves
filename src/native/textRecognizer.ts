@@ -14,7 +14,7 @@ export type RecognizedLine = {
 export type RecognizedText = { text: string; lines: RecognizedLine[] };
 
 export function recognizeText(imageUri: string): Promise<RecognizedText> {
-  return Platform.OS === 'ios'
+  return Platform.OS === 'ios' && VisionTextRecognizer
     ? VisionTextRecognizer.recognize(imageUri)
     : recognizeWithMlKit(imageUri);
 }

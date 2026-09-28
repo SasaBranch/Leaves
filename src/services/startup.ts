@@ -10,11 +10,12 @@ import { syncShelf } from './sync/syncShelf';
 
 /**
  * 画面表示の前に行う: v1.0 のデータの移行（初回のみ）→ 最後に開いた本棚（なければ一覧の先頭）を開く。
- * 本棚が1つもなければ null（本棚の作成画面を表示する。FR-V-01）
+ * 開ける本棚が1つもなければ null（本棚の作成画面を表示する。FR-V-01）
  */
 export async function openInitialShelf(): Promise<OpenShelf | null> {
   await migrateLegacyDataIfPresent();
-  const shelves = listShelves();
+  // 別の場所にアクセスできない本棚は開かない（設定で「開けません」と示す。FR-L-04）
+  const shelves = listShelves().filter((shelf) => shelf.available);
   const { lastOpenedShelfId } = readAppSettings();
   const shelf = shelves.find((candidate) => candidate.id === lastOpenedShelfId) ?? shelves[0];
   return shelf ? openShelf(shelf) : null;
@@ -26,7 +27,7 @@ export async function openInitialShelf(): Promise<OpenShelf | null> {
  */
 export async function runShelfMaintenance(shelf: OpenShelf): Promise<void> {
   await shelf.runExclusively(async () => {
-    for (const directory of [workDirectory(), exportDirectory()]) {
+    for (const directory of [workDirectory(shelf.directory), exportDirectory()]) {
       if (directory.exists) directory.delete();
     }
   });

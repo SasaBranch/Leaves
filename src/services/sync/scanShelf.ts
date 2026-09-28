@@ -17,7 +17,14 @@ import {
   type PageManifest,
 } from '@/storage/manifest';
 import { importExternalImage } from '@/storage/pageImages';
-import { entryName, isHiddenEntryName, originalImageFile, pageFileName } from '@/storage/paths';
+import { requestICloudDownload } from '@/native/folderAccess';
+import {
+  entryName,
+  isHiddenEntryName,
+  MANIFEST_FILE_NAME,
+  originalImageFile,
+  pageFileName,
+} from '@/storage/paths';
 
 import { isSupportedImageName, normalizeNoteFolder } from './normalizeNoteFolder';
 
@@ -30,6 +37,8 @@ export type ScanResult = {
   notes: ScannedNote[];
   /** 読めなかったフォルダ。飛ばして続ける（NFR-R-04） */
   failures: { uri: string; error: unknown }[];
+  /** iCloud のダウンロード待ちがあった（ダウンロードが済んだら、もう一度反映する。FR-L-06） */
+  hasPendingDownloads: boolean;
 };
 
 type Context = {
@@ -51,7 +60,7 @@ export async function scanShelf(
     shelfId,
     now,
     index,
-    result: { notebooks: [], notes: [], failures: [] },
+    result: { notebooks: [], notes: [], failures: [], hasPendingDownloads: false },
     seenIds: new Set(),
     visitedFolderCount: 0,
   };
@@ -70,6 +79,9 @@ async function visitListedNotebookFolder(
     if (isHiddenEntryName(entry.name)) continue;
     if (entry instanceof Directory) {
       await visitChildFolder(context, entry, notebookId);
+    } else if (isICloudPlaceholderName(entry.name)) {
+      // ダウンロードが済めば普通の画像になり、次の反映で取り込まれる
+      requestPlaceholderDownload(context, entry);
     } else if (isSupportedImageName(entryName(entry))) {
       looseImages.push(entry);
     }
@@ -155,7 +167,18 @@ async function visitFolderByManifest(
   name: string,
   modifiedAt: number,
 ): Promise<void> {
-  const manifest = readManifest(folder);
+  const placeholders = folder
+    .list()
+    .filter((entry): entry is File => entry instanceof File && isICloudPlaceholderName(entry.name));
+  for (const placeholder of placeholders) requestPlaceholderDownload(context, placeholder);
+  const isManifestPending = placeholders.some((entry) => entry.name === MANIFEST_PLACEHOLDER_NAME);
+  const manifest = isManifestPending ? null : readManifest(folder);
+  // 管理用ファイルやページ画像がまだ届いていないフォルダを読むと、ノートをノートブックと取り違えたり、
+  // ページが消えたとみなしたりするため、前回の状態のまま保つ（NFR-R-06）
+  if (isManifestPending || (isNoteManifest(manifest) && placeholders.length > 0)) {
+    await keepPreviousState(context, folder, parentId, name);
+    return;
+  }
   if (isNoteManifest(manifest)) {
     await visitNoteFolder(context, folder, parentId, name, modifiedAt, manifest);
     return;
@@ -214,6 +237,47 @@ async function visitNoteFolder(
     directory: folder,
     pages: normalized.pages,
   });
+}
+
+/**
+ * iCloud のダウンロード待ちのフォルダは、DB の前回の記録をそのまま走査結果に入れる。
+ * 前回の記録がない（初めて見る）フォルダは、ダウンロードが済んでから取り込む
+ */
+async function keepPreviousState(
+  context: Context,
+  folder: Directory,
+  parentId: NotebookId | null,
+  name: string,
+): Promise<void> {
+  const notebook = context.index.notebooks.find(
+    (candidate) => candidate.parentId === parentId && candidate.name === name,
+  );
+  if (notebook) {
+    context.seenIds.add(notebook.id);
+    context.result.notebooks.push(notebook);
+    await visitListedNotebookFolder(context, folder, notebook.id);
+    return;
+  }
+  const note = context.index.notes.find(
+    (candidate) => candidate.notebookId === parentId && candidate.title === name,
+  );
+  if (note) {
+    context.seenIds.add(note.id);
+    context.result.notes.push({ ...note, directory: folder, pages: null });
+  }
+}
+
+/** iCloud の未ダウンロードの印（`.本当の名前.icloud`）。ADR 0025・事前検証 R-10 で見え方を確かめる */
+const ICLOUD_PLACEHOLDER = /^\..+\.icloud$/;
+const MANIFEST_PLACEHOLDER_NAME = `.${MANIFEST_FILE_NAME}.icloud`;
+
+function isICloudPlaceholderName(name: string): boolean {
+  return ICLOUD_PLACEHOLDER.test(name);
+}
+
+function requestPlaceholderDownload(context: Context, placeholder: File): void {
+  requestICloudDownload(placeholder);
+  context.result.hasPendingDownloads = true;
 }
 
 /** ノートブック直下に置かれた画像を、1枚ずつ新しいノートにする（FR-X-06）。ノート名は画像のファイル名 */

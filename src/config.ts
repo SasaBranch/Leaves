@@ -62,3 +62,8 @@ export const SYNC_YIELD_EVERY_FOLDERS = 50;
 
 /** SC-11 の拡大鏡の倍率。四隅を紙の角に合わせやすくする（詳細設計書 9.12） */
 export const EDIT_MAGNIFIER_SCALE = 2;
+
+/** iCloud のダウンロード待ちがあったとき、次の反映までの時間（詳細設計書 9.13） */
+export const ICLOUD_RESYNC_DELAY_MS = 5000;
+/** 上の再反映の回数の上限（約30秒）。それ以降は次に前面に戻ったときに反映する */
+export const ICLOUD_RESYNC_MAX_TIMES = 6;

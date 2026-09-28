@@ -1,5 +1,6 @@
 // 外部変更の反映（基本設計書 6.7、詳細設計書 9.9）。本棚フォルダを走査し、索引 DB を合わせる。
 // 呼ばれるのは起動時・本棚を開いたとき・前面に戻ったとき。
+import { ICLOUD_RESYNC_DELAY_MS, ICLOUD_RESYNC_MAX_TIMES } from '@/config';
 import {
   deleteNotebooksByIds,
   deleteNotesByIds,
@@ -50,7 +51,7 @@ function startSync(shelf: OpenShelf): Promise<void> {
 
 async function runSync(shelf: OpenShelf): Promise<void> {
   const startedAt = performance.now();
-  const changes = await shelf.runExclusively(async () => {
+  const { changes, hasPendingDownloads } = await shelf.runExclusively(async () => {
     const now = new Date().toISOString();
     const index = await loadIndexSnapshot(shelf.db);
     const scan = await scanShelf(shelf.directory, shelf.id, index, now);
@@ -59,12 +60,33 @@ async function runSync(shelf: OpenShelf): Promise<void> {
     }
     const diff = diffIndex(index, scan, now);
     await applyIndexChanges(shelf, diff, now);
-    return diff;
+    return { changes: diff, hasPendingDownloads: scan.hasPendingDownloads };
   });
   // 性能計測（NFR-P-07: 変更なし時 5秒以内）
   if (__DEV__) console.log(`[perf] sync: ${(performance.now() - startedAt).toFixed(0)}ms`);
   if (hasChanges(changes)) notifyDataChanged();
   enqueueOcr(changes.pendingPageIds);
+  scheduleICloudResync(shelf, hasPendingDownloads);
+}
+
+const iCloudResyncCounts = new WeakMap<OpenShelf, number>();
+
+/**
+ * iCloud のダウンロード待ちがあったら、少し待ってからもう一度反映する（FR-L-06）。
+ * 回数に上限を設け、それ以降は次に前面に戻ったときに反映する（届かないファイルで反映を繰り返さないため）
+ */
+function scheduleICloudResync(shelf: OpenShelf, hasPendingDownloads: boolean): void {
+  const count = (iCloudResyncCounts.get(shelf) ?? 0) + 1;
+  if (!hasPendingDownloads || count > ICLOUD_RESYNC_MAX_TIMES) {
+    iCloudResyncCounts.delete(shelf);
+    return;
+  }
+  iCloudResyncCounts.set(shelf, count);
+  setTimeout(() => {
+    syncShelf(shelf).catch((error: unknown) =>
+      console.warn('iCloud のダウンロード後の反映に失敗しました', error),
+    );
+  }, ICLOUD_RESYNC_DELAY_MS);
 }
 
 /**

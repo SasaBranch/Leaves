@@ -67,7 +67,7 @@ test('seedTestData: テストデータの下に子ノートブックとノート
   expect(new Set(updatedAts).size).toBe(20);
   expect(mockSyncShelf).toHaveBeenCalledWith(shelf);
   // 作業用フォルダは残さない
-  expect(fs.readdirSync(nodePathOf(workDirectory().uri))).toEqual([]);
+  expect(fs.readdirSync(nodePathOf(workDirectory(shelf.directory).uri))).toEqual([]);
 });
 
 test('seedTestData: ページ画像 001.jpg …・サムネイル・OCR 済みの本文を作る', async () => {

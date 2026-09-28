@@ -13,8 +13,14 @@ export type IsoDateTime = string;
 
 export type NotebookColor = (typeof NOTEBOOK_COLORS)[number];
 
-/** ノートブック・ノート一式の保存単位。Documents 直下の1フォルダ（基本設計書 5.4） */
-export type Shelf = { id: ShelfId; name: string };
+/** 本棚の場所。app: アプリ内（Documents 直下）、icloud: iCloud Drive、external: そのほかの選んだ場所（FR-L-01） */
+export type ShelfLocationKind = 'app' | 'icloud' | 'external';
+
+/**
+ * ノートブック・ノート一式の保存単位。1つのフォルダ（基本設計書 5.4）。
+ * available が false は、別の場所にアクセスできない（許可切れ・見つからない。FR-L-04）
+ */
+export type Shelf = { id: ShelfId; name: string; location: ShelfLocationKind; available: boolean };
 
 /** 画像に対する相対座標（0〜1） */
 export type Point = { x: number; y: number };

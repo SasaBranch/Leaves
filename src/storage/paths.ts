@@ -6,7 +6,7 @@ import { PAGE_FILE_NUMBER_DIGITS } from '@/config';
 import type { PageId, ShelfId } from '@/domain/types';
 
 const PAGE_IMAGE_EXTENSION = '.jpg';
-const MANIFEST_FILE_NAME = '.leaves.json';
+export const MANIFEST_FILE_NAME = '.leaves.json';
 
 /** 本棚の親（「ファイル」アプリの このiPhone内 > Leaves） */
 export const shelvesRootDirectory = () => new Directory(Paths.document);
@@ -20,10 +20,11 @@ export const shelvesInternalDirectory = () => new Directory(appInternalDirectory
 export const shelfInternalDirectory = (shelfId: ShelfId) =>
   new Directory(shelvesInternalDirectory(), shelfId);
 /**
- * 組み立て中のノートの置き場所。本棚と同じボリュームに置き、完成したノートを移動（名前の付け替え）だけで
- * 本棚に置けるようにする。起動時に空にする
+ * 組み立て中のノートの置き場所。本棚フォルダの中に置き、本棚が別の場所・別のボリューム（iCloud Drive など）に
+ * あっても、完成したノートを同じボリューム内の移動（名前の付け替え）だけで置けるようにする（ADR 0025）。
+ * . で始まるため走査の対象にならない。本棚を開いたときに空にする
  */
-export const workDirectory = () => new Directory(appInternalDirectory(), 'work');
+export const workDirectory = (shelf: Directory) => new Directory(shelf, '.leaves-work');
 
 export const notebookDirectory = (shelf: Directory, notebookPath: string[]) =>
   new Directory(shelf, ...notebookPath);
@@ -76,7 +77,8 @@ export const legacyEntries = () => [
   new File(Paths.document, 'image-operation-in-progress'),
 ];
 /** 移行する本棚を組み立てる場所。やり直すときは消してから作る */
-export const legacyMigrationWorkDirectory = () => new Directory(workDirectory(), 'legacy');
+export const legacyMigrationWorkDirectory = () =>
+  new Directory(appInternalDirectory(), 'work', 'legacy');
 
 /** 書き出し用の一時ファイル。共有後に削除する */
 export const exportDirectory = () => new Directory(Paths.cache, 'export');

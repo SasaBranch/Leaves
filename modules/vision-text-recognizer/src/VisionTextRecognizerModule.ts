@@ -1,4 +1,4 @@
-import { NativeModule, requireNativeModule } from 'expo';
+import { NativeModule, requireOptionalNativeModule } from 'expo';
 
 export type VisionRecognizedLine = {
   text: string;
@@ -6,9 +6,10 @@ export type VisionRecognizedLine = {
   frame: { left: number; top: number; width: number; height: number };
 };
 
-declare class VisionTextRecognizerModule extends NativeModule<{}> {
+declare class VisionTextRecognizerModule extends NativeModule<Record<string, never>> {
   recognize(uri: string): Promise<{ text: string; lines: VisionRecognizedLine[] }>;
 }
 
-// iOS 専用。Android は ML Kit を使う（src/native/textRecognizer.ts）
-export default requireNativeModule<VisionTextRecognizerModule>('VisionTextRecognizer');
+// iOS 専用。Android は ML Kit を使う（src/native/textRecognizer.ts）。
+// Android では読み込んだだけで落ちないよう、なければ null にする
+export default requireOptionalNativeModule<VisionTextRecognizerModule>('VisionTextRecognizer');

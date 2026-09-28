@@ -6,6 +6,8 @@ export type AppErrorKind =
   | 'invalidNameCharacters' // 使えない文字・先頭の .
   | 'duplicateName' // 同じ場所に同名（ノートブック・ノートを合わせて）
   | 'duplicateShelfName' // 同名の本棚
+  | 'shelfUnavailable' // 別の場所の本棚にアクセスできない（FR-L-04）
+  | 'shelfMoveFailed' // 本棚の場所の移動に失敗（元のまま残る）
   | 'invalidMove' // 自分自身・子孫への移動
   | 'storageFull' // 空き容量不足
   | 'cameraPermissionDenied'

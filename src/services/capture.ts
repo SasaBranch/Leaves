@@ -81,16 +81,29 @@ async function assembleNoteInWorkDirectory(
   images: CapturedImage[],
   now: IsoDateTime,
 ): Promise<{ move(target: Directory): void; pages: PageManifest[] }> {
-  const folder = new Directory(workDirectory(), noteId);
+  const folder = new Directory(workDirectory(shelf.directory), noteId);
   folder.create({ intermediates: true, overwrite: true });
   try {
     const pages = await storePageImages(images, folder, 0, shelf.id, now);
     writeManifest(folder, newNoteManifest(noteId, pages, now));
-    return { move: (target) => folder.moveSync(target), pages };
+    return {
+      move: (target) => {
+        folder.moveSync(target);
+        removeWorkDirectoryIfEmpty(shelf);
+      },
+      pages,
+    };
   } catch (error) {
     folder.delete();
+    removeWorkDirectoryIfEmpty(shelf);
     throw error;
   }
+}
+
+/** 本棚フォルダの中に空の作業用フォルダを残さない（Finder で隠しファイルを表示したときに散らからないように） */
+function removeWorkDirectoryIfEmpty(shelf: OpenShelf): void {
+  const work = workDirectory(shelf.directory);
+  if (work.exists && work.list().length === 0) work.delete();
 }
 
 async function insertPages(

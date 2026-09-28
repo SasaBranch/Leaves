@@ -52,7 +52,9 @@ function capturedImage(name: string, content = name): CapturedImage {
 }
 
 async function captureNote(title: string, pageContents: string[], notebookId = null) {
-  const images = pageContents.map((content, index) => capturedImage(`${title}-${index}.jpg`, content));
+  const images = pageContents.map((content, index) =>
+    capturedImage(`${title}-${index}.jpg`, content),
+  );
   return createNoteFromCapture(shelf, { images, title, notebookId });
 }
 
@@ -94,7 +96,11 @@ test('外部で作られたフォルダはノートブックになり、直下�
   expect(note?.title).toBe('レシート');
   expect(fs.readdirSync(shelfPath('旅行', 'レシート')).sort()).toEqual(['.leaves.json', '001.jpg']);
   // 元の画像は取り込んだので消え、対応しないファイルは残る（FR-X-08）
-  expect(fs.readdirSync(shelfPath('旅行')).sort()).toEqual(['.leaves.json', 'メモ.txt', 'レシート']);
+  expect(fs.readdirSync(shelfPath('旅行')).sort()).toEqual([
+    '.leaves.json',
+    'メモ.txt',
+    'レシート',
+  ]);
   expect((await listPagesOfNote(shelf.db, note!.id))[0]?.ocrStatus).toBe('pending');
 });
 
@@ -174,7 +180,9 @@ test('Finder で複製したノートは別のノートになり、OCR 結果は
   const noteId = await captureNote('講義', ['a']);
   markOcrDone(['講義'], '固有値');
   await syncShelf(shelf);
-  await externally(() => fs.cpSync(shelfPath('講義'), shelfPath('講義 のコピー'), { recursive: true }));
+  await externally(() =>
+    fs.cpSync(shelfPath('講義'), shelfPath('講義 のコピー'), { recursive: true }),
+  );
   await syncShelf(shelf);
 
   const notes = await listNoteSummaries(shelf.db, null, 'name');
@@ -197,7 +205,9 @@ test('.leaves.json が壊されたノートはノートブックになり、中�
 
   const [notebook] = await listAllNotebooks(shelf.db);
   expect(notebook?.name).toBe('講義');
-  expect((await listNoteSummaries(shelf.db, notebook!.id, 'name')).map((n) => n.title)).toEqual(['001']);
+  expect((await listNoteSummaries(shelf.db, notebook!.id, 'name')).map((n) => n.title)).toEqual([
+    '001',
+  ]);
 });
 
 test('DB が失われても、本棚フォルダからノートブック・ノート・ページ・OCR 結果を復元できる（NFR-R-05）', async () => {
@@ -213,9 +223,14 @@ test('DB が失われても、本棚フォルダからノートブック・ノ�
   shelf = { ...shelf, db: await createMigratedTestDb() };
   await syncShelf(shelf);
 
-  expect((await listAllNotebooks(shelf.db)).map((n) => [n.id, n.name])).toEqual([[notebookId, '大学']]);
+  expect((await listAllNotebooks(shelf.db)).map((n) => [n.id, n.name])).toEqual([
+    [notebookId, '大学'],
+  ]);
   expect((await findNote(shelf.db, noteId))?.notebookId).toBe(notebookId);
-  expect(await findPage(shelf.db, page!.id)).toMatchObject({ ocrStatus: 'done', ocrText: '固有値' });
+  expect(await findPage(shelf.db, page!.id)).toMatchObject({
+    ocrStatus: 'done',
+    ocrText: '固有値',
+  });
 });
 
 test('ノートの中で読めないフォルダがあっても、ほかの反映は続ける（NFR-R-04）', async () => {
@@ -237,4 +252,48 @@ test('ノート名の重複：直下に同じ名前のフォルダがあれば�
   const noteIds = (await listNoteSummaries(shelf.db, null, 'name')).map((note) => note.id);
   expect(new Set(noteIds).size).toBe(2);
   expect(noteIds.every((id): id is NoteId => typeof id === 'string')).toBe(true);
+});
+
+describe('iCloud のダウンロード待ち（FR-L-06、NFR-R-06）', () => {
+  const { fakeFolderAccess } = jest.requireActual(
+    '../../../test/fakeFolderAccess',
+  ) as typeof import('../../../test/fakeFolderAccess');
+  beforeEach(() => fakeFolderAccess.reset());
+
+  test('ページ画像がまだ届いていないノートは、ページを消さずに前回のまま保ち、ダウンロードを頼む', async () => {
+    const noteId = await captureNote('講義', ['a', 'b']);
+    await syncShelf(shelf);
+    await externally(() => {
+      fs.rmSync(shelfPath('講義', '002.jpg'));
+      fs.writeFileSync(shelfPath('講義', '.002.jpg.icloud'), '');
+    });
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+    try {
+      await syncShelf(shelf);
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(await listPagesOfNote(shelf.db, noteId)).toHaveLength(2);
+    expect(fakeFolderAccess.requestedDownloads.some((uri) => uri.endsWith('.002.jpg.icloud'))).toBe(
+      true,
+    );
+  });
+
+  test('管理用ファイルがまだ届いていないノートは、ノートブックと取り違えない', async () => {
+    const noteId = await captureNote('講義', ['a']);
+    await syncShelf(shelf);
+    await externally(() => {
+      fs.rmSync(shelfPath('講義', '.leaves.json'));
+      fs.writeFileSync(shelfPath('講義', '..leaves.json.icloud'), '');
+    });
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+    try {
+      await syncShelf(shelf);
+    } finally {
+      jest.useRealTimers();
+    }
+    expect(await findNote(shelf.db, noteId)).not.toBeNull();
+    expect(await listAllNotebooks(shelf.db)).toEqual([]);
+    expect(fs.readdirSync(shelfPath('講義')).sort()).toEqual(['..leaves.json.icloud', '001.jpg']);
+  });
 });

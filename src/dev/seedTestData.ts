@@ -97,7 +97,7 @@ export async function seedTestData(
   const sampleThumbnail = await findSampleThumbnail(shelf);
   await shelf.runExclusively(async () => {
     rejectExistingTestData(shelf);
-    const work = new Directory(workDirectory(), 'seed');
+    const work = new Directory(workDirectory(shelf.directory), 'seed');
     work.create({ intermediates: true, overwrite: true });
     try {
       const sample = sampleThumbnail ?? writeFallbackSample(work);

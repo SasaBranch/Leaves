@@ -52,7 +52,8 @@ const entriesOf = (...parts: string[]) => fs.readdirSync(shelfPath(...parts)).so
 const contentOf = (...parts: string[]) => fs.readFileSync(shelfPath(...parts), 'utf8');
 const noteManifestOf = (...parts: string[]) =>
   readManifest(new Directory(shelf.directory, ...parts)) as NoteManifest;
-const workEntries = () => (workDirectory().exists ? workDirectory().list() : []);
+const workEntries = () =>
+  workDirectory(shelf.directory).exists ? workDirectory(shelf.directory).list() : [];
 const thumbnailEntries = () =>
   thumbnailsDirectory(shelf.id).exists ? thumbnailsDirectory(shelf.id).list() : [];
 

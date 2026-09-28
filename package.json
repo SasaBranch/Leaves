@@ -75,7 +75,8 @@
     ],
     "moduleNameMapper": {
       "^expo-file-system$": "<rootDir>/test/nodeFileSystem.ts",
-      "^expo-image-manipulator$": "<rootDir>/test/fakeImageManipulator.ts"
+      "^expo-image-manipulator$": "<rootDir>/test/fakeImageManipulator.ts",
+      "^@/native/folderAccess$": "<rootDir>/test/fakeFolderAccess.ts"
     }
   }
 }

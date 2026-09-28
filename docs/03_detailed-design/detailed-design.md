@@ -3,11 +3,11 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves 詳細設計書 |
-| 版数 | 2.2 |
+| 版数 | 2.3 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
 | ステータス | 確定 |
-| 入力文書 | [要件定義書 v1.2](../01_requirements/requirements.md) / [基本設計書 v1.1](../02_basic-design/basic-design.md) / [ADR](../adr/README.md) |
+| 入力文書 | [要件定義書 v1.3](../01_requirements/requirements.md) / [基本設計書 v1.2](../02_basic-design/basic-design.md) / [ADR](../adr/README.md) |
 
 ### 改訂履歴
 
@@ -24,6 +24,7 @@
 | 2.0 | 2026-09-28 | 本棚と、本棚フォルダを正本とする保存方式に対応（基本設計書 v1.1、ADR 0016〜0020）。2, 3.2〜3.3, 4, 5, 6.1〜6.2, 7〜12, 14 章。9.8〜9.11 を追加 |
 | 2.1 | 2026-09-28 | 9.9 事前検証 R-6・R-7 の結果を反映（ADR 0021、#38） |
 | 2.2 | 2026-09-28 | 9.9 上書きされたページ画像の反映を追加（ADR 0022） |
+| 2.3 | 2026-09-28 | ページの編集（基本設計書 v1.2 SC-11・6.11）。4.1, 4.5, 5.1〜5.2, 8, 9.12, 10, 12 章。ADR 0023 |
 
 ---
 
@@ -53,6 +54,7 @@
 | [0017](../adr/0017-leaves-json-identifies-folders.md) `.leaves.json` | 管理用ファイルの型と読み書き（5.2, 9.9） |
 | [0018](../adr/0018-internal-data-outside-shelf.md) 内部データは `Documents/.leaves/` | 保存場所（4.5） |
 | [0019](../adr/0019-fake-expo-file-system-on-node-fs.md) ファイル操作のテスト | expo-file-system を直接使い、テストでは node の fs で動く偽物に差し替える（12 章） |
+| [0023](../adr/0023-local-module-for-perspective-correction.md) 台形補正 | 自作の Expo モジュール `modules/page-image-editor`（9.12） |
 | [0020](../adr/0020-sync-skips-unchanged-folders.md) 走査の省略 | フォルダの更新日時が前回の走査時と同じなら中身を読まない。アプリ自身の変更では記録を更新しない（9.9） |
 
 ---
@@ -170,10 +172,12 @@ src/
 │   ├── capture.tsx                … SC-4 スキャン保存
 │   ├── search.tsx                 … SC-7 検索
 │   ├── move.tsx                   … SC-8 移動先選択
+│   ├── note/[id]/edit.tsx         … SC-11 ページ編集（?page={pageId}）
 │   └── settings.tsx               … SC-10 設定（SC-9 は ui/components/WelcomeScreen.tsx）
 ├── domain/
 │   ├── types.ts                   … 型定義（5 章）
 │   ├── name.ts                    … 名前の規則（9.11）
+│   ├── pageEdit.ts                … ページ編集の座標計算（回転・四隅の検査。9.12）
 │   └── serialQueue.ts             … 順番待ち（DB・本棚のファイル操作で共通）
 ├── config.ts                      … 名前付き定数（11 章）
 ├── db/
@@ -196,6 +200,7 @@ src/
 │   ├── scanner.ts
 │   ├── imagePicker.ts
 │   ├── textRecognizer.ts
+│   ├── pageImageEditor.ts         … 台形補正・回転（modules/page-image-editor の包み）
 │   └── share.ts
 ├── services/
 │   ├── capture.ts                 … ノート作成・ページ追加
@@ -204,6 +209,7 @@ src/
 │   ├── ocrQueue.ts                … OCR キュー（開いている本棚のみ）
 │   ├── shelves.ts                 … 本棚の一覧・作成・名前変更・削除・開く・閉じる（9.8）
 │   ├── folders.ts                 … DB の親子・名前から本棚フォルダ内の場所を求める
+│   ├── pageEdits.ts               … ページの編集・元に戻す（9.12）
 │   ├── sync/                      … 外部変更の反映（9.9）
 │   │   ├── syncShelf.ts           … 目次（走査 → 正規化 → DB に反映）
 │   │   ├── scanShelf.ts           … 本棚フォルダを読む
@@ -312,6 +318,7 @@ export type OpenShelf = {
 | `pageFileName(position)` | `001.jpg` …（`position` は 0 始まり、名前は 1 始まり、`PAGE_FILE_NUMBER_DIGITS` 桁のゼロ埋め。1000 ページ目以降は桁が増える） |
 | `thumbnailFile(shelf, pageId)` | `shelfInternalDirectory/thumbs/{pageId}.jpg` |
 | `manifestFile(directory)` | `directory/.leaves.json` |
+| `originalImageFile(noteDirectory, pageId)` | `noteDirectory/.originals/{pageId}.jpg`（編集したページの元の画像） |
 
 - ページ画像の場所は ID だけでは決まらない（ノートの場所・名前と、ページの順番で決まる）。画面は `useNote` が返す `noteDirectory` と `page.position` から組み立てる
 - 名前が `.` で始まるものは、アプリの管理用とみなして走査・一覧の対象から外す（`isHiddenEntryName`）
@@ -336,6 +343,12 @@ export type ShelfId = Brand<string, 'ShelfId'>;
 export type IsoDateTime = string; // ISO 8601（UTC）
 
 export type Shelf = { id: ShelfId; name: string };
+
+/** 画像に対する相対座標（0〜1） */
+export type Point = { x: number; y: number };
+export type PageRotation = 0 | 90 | 180 | 270; // 右回り
+/** ページの編集内容。四隅は元の画像（回転前）に対する相対座標で、左上・右上・右下・左下の順 */
+export type PageEdit = { corners: [Point, Point, Point, Point]; rotation: PageRotation };
 
 export type Notebook = {
   id: NotebookId;
@@ -416,6 +429,7 @@ export type PageManifest = {
   ocrStatus: 'pending' | 'done' | 'failed'; // processing は DB の中だけの一時的な状態
   ocrText: string; ocrLines: OcrLine[];
   createdAt: IsoDateTime;
+  edit?: PageEdit | null; // 編集したページだけ。あれば .originals/{id}.jpg に元の画像がある（v2.3 で追加。ない版の JSON もそのまま読める）
 };
 export type Manifest = ShelfManifest | NotebookManifest | NoteManifest;
 
@@ -613,6 +627,7 @@ export function subscribeDataChanged(listener: () => void): () => void; // 戻�
 | `useCaptureLauncher(target)` | `{ scan, importPhotos }`（新しいノートを作る／既存ノートにページを足す） | SC-1, SC-2, SC-5 |
 | `useItemMenus()` | 長押しメニュー・名前入力ダイアログを開く関数と、その描画要素 | SC-1, SC-2 |
 | `useShelf()` / `useDb()` | 開いている本棚 / その DB | すべて |
+| `usePageEditSource(noteId, pageId)` | `{ page, originalImage, edit }`（元の画像と前回の編集。未編集ならページ画像と null） | SC-11 |
 | `useShelves()` | 本棚の一覧（`Documents` 直下の走査。設定画面を開いたときと、本棚の操作の後に取り直す） | SC-10 |
 | `useSyncOnForeground(shelf)` | なし（起動時と、アプリが前面に戻ったときに `syncShelf` を呼ぶ） | ルートレイアウト |
 
@@ -862,6 +877,64 @@ export const FORBIDDEN_NAME_CHARACTERS = ['/', '\\', ':', '*', '?', '"', '<', '>
 
 ---
 
+### 9.12 ページの編集（`services/pageEdits.ts`、基本設計書 6.11）
+
+```ts
+export async function editPage(shelf: OpenShelf, pageId: PageId, edit: PageEdit): Promise<void>;
+export async function revertPageEdit(shelf: OpenShelf, pageId: PageId): Promise<void>;
+```
+
+`editPage` の段落（すべて `shelf.runExclusively` の中）:
+1. ページとノートのフォルダを求め、`.leaves.json` のページを読む
+2. 元の画像がなければ（初めての編集）、ページ画像を `.originals/{pageId}.jpg` にコピーする
+3. `correctPageImage(元の画像, edit, PAGE_IMAGE_MAX_EDGE_PX, PAGE_IMAGE_JPEG_QUALITY)` で補正した一時ファイルを作る
+4. ページ画像を一時ファイルで置き換え、サムネイルを作り直す（`regenerateThumbnail`）
+5. `.leaves.json` のページを更新（大きさ・サイズ・更新日時・`edit`、OCR を pending・空に）→ DB（`resetPageForReplacedImage`、`markNoteUpdated`）
+6. 外で `notifyDataChanged()`・`enqueueOcr([pageId])`
+
+`revertPageEdit` は 3 の代わりに元の画像をページ画像へ移し（`.originals` から消える）、`edit` を null にする。4〜6 は同じ。
+
+**ネイティブモジュール（`modules/page-image-editor`、ADR 0023）**
+
+```ts
+// src/native/pageImageEditor.ts
+export function correctPageImage(
+  sourceUri: string,
+  edit: PageEdit,
+  options: { maxEdge: number; quality: number },
+): Promise<{ uri: string; width: number; height: number }>; // キャッシュに JPEG を書く
+```
+
+- 処理の順: 四隅（相対座標 → 元の画像の px）で台形補正 → `rotation` だけ右に回転 → 長辺 `maxEdge` に縮小（拡大はしない）→ JPEG
+- 補正後の大きさ: 幅 = 上辺と下辺の長さの平均、高さ = 左辺と右辺の長さの平均（台形を長方形に広げたときの自然な大きさ）
+- iOS: Core Image の `CIPerspectiveCorrection`（座標は左下原点に変換）、`oriented(_:)` で回転、`CILanczosScaleTransform` で縮小、`CIContext.writeJPEGRepresentation`
+- Android: `Matrix.setPolyToPoly`（四隅 → 長方形）で `Canvas` に描き、`Matrix.postRotate` で回転、`Bitmap.compress(JPEG)`
+- 画像の読み込み時に EXIF の向きを反映する（外部で置かれた画像にも対応するため）
+
+**座標計算（`domain/pageEdit.ts`、純粋関数）**
+
+| 関数 | 内容 |
+|---|---|
+| `toDisplayPoint(point, rotation)` / `toOriginalPoint(point, rotation)` | 元の画像の相対座標 ⇔ 回転後の表示の相対座標。編集画面は回転後の向きで表示し、ハンドルの位置はこの変換で求める |
+| `isValidQuadrilateral(corners)` | 四隅が凸四角形になっているか（枠がねじれない・つぶれない）。ドラッグで条件を破る位置には動かさない |
+| `FULL_IMAGE_CORNERS` | 画像の四隅（「全体」ボタン・未編集の初期値） |
+| `rotateClockwise(rotation)` | 回転ボタン（0 → 90 → 180 → 270 → 0） |
+
+**外部変更・他の操作との関係**
+
+| 場面 | 元の画像（`.originals/`）と `edit` の扱い |
+|---|---|
+| ページの削除（9.4） | 元の画像も消す |
+| ノートの削除・移動・名前変更 | フォルダごとなので何もしない |
+| 外部で画像が上書きされた（`refreshReplacedPages`、ADR 0022） | 元の画像を消し、`edit` を null にする（上書きされた画像を新しい元の画像とみなす） |
+| 外部変更の反映で消えたページ（`normalizeNoteFolder`） | 元の画像を消す。どのページにも対応しない `.originals/` のファイルも消す |
+| Finder での複製（新しい ID を振るとき） | 元の画像のファイル名を新しいページ ID に付け直す |
+
+**画面（SC-11）**
+- ハンドルのドラッグは react-native-gesture-handler の Pan と reanimated の共有値で行い、JS スレッドを通さずに動かす
+- 拡大鏡は、指の上に円形の枠を出し、元の画像を `EDIT_MAGNIFIER_SCALE` 倍にずらして表示する
+- 完了中は操作を止める（補正に 1 秒前後かかるため）。失敗したら `pageEditFailed` を表示し、画面に留まる
+
 ## 10. エラー設計
 
 ### 10.1 エラーの種類
@@ -880,7 +953,8 @@ export type AppErrorKind =
   | 'storageFull'          // 空き容量不足
   | 'cameraPermissionDenied'
   | 'photoPermissionDenied'
-  | 'exportFailed';
+  | 'exportFailed'
+  | 'pageEditFailed';      // ページの編集（台形補正・回転・元に戻す）に失敗
 ```
 
 エラーの種類を `kind` で区別し、クラスを増やさない（クラスが増えても振る舞いは同じで、区別したいのは種類だけのため）。
@@ -916,6 +990,7 @@ export function pickImages(): Promise<CapturedImage[] | null>;
 | `OCR_TEXT_HEIGHT_RATIO` | 0.85 | 透明テキストの文字サイズ ÷ 行の高さ（行の上下の余白分を引く） |
 | `NOTEBOOK_COLORS` | 6色 | 基本設計書 2.2 の表紙色 |
 | `DEFAULT_EXPORT_FILE_NAME` | `'Leaves'` | ファイル名が空になったときの代わり |
+| `EDIT_MAGNIFIER_SCALE` | 2 | SC-11 の拡大鏡の倍率。四隅を紙の角に合わせやすくする |
 | `DEFAULT_SHELF_NAME` | `'マイ本棚'` | SC-9 の名前の初期値、v1.0 のデータの移行先（基本設計書 4.3, 6.9） |
 | `PAGE_FILE_NUMBER_DIGITS` | 3 | ページのファイル名の桁数（`001.jpg`）。Finder で 999 ページまで番号順に並ぶ |
 | `SUPPORTED_IMAGE_EXTENSIONS` | `['.jpg', '.jpeg', '.png', '.heic']` | 外部で置かれた画像のうち、ページとして取り込むもの（基本設計書 6.7。大文字・小文字は区別しない） |
@@ -932,6 +1007,8 @@ export function pickImages(): Promise<CapturedImage[] | null>;
 | services | Jest。`src/native` と画像の変換（expo-image-manipulator）を `jest.mock` で置き換え、expo-file-system は node の fs で動く偽物（`test/nodeFileSystem.ts`、一時フォルダ上。ADR 0019）に差し替える | 処理の順番（フォルダ → DB）、失敗時の後始末、OCR の状態遷移、移動の検証、名前の重複 |
 | 外部変更の反映 | 同上。一時フォルダに本棚を作り、node の fs で外部変更（作成・名前変更・移動・削除・画像の追加・複製・`.leaves.json` の破損）を起こしてから `syncShelf` を呼ぶ | 基本設計書 6.7 の各規則、2回続けて呼んでも変わらないこと、DB を消してからの復元（NFR-R-05） |
 | 差分計算 | Jest（純粋関数） | `diffIndex` の各ケース |
+| ページの編集 | Jest。`src/native/pageImageEditor` を偽物（元の画像を写すだけ）に差し替える。座標計算は純粋関数としてテスト | 元の画像の保存・再編集で元の画像から補正すること・元に戻す・削除や外部変更での元の画像の後始末 |
+| 台形補正のネイティブ処理 | iOS シミュレータ・実機で目視（斜めに撮った紙を補正して真上からに見えるか）。Android は #4・#5 のときに確認 | 補正・回転の向き、EXIF の向き |
 | 純粋な関数 | Jest | ファイル名の変換、既定タイトル、PDF の座標計算、スニペットの切り出し |
 | 画面・ネイティブ連携 | 実機・シミュレータでの手動確認 | テスト仕様書（docs/04_test）で定める |
 | 性能（NFR-P） | 開発ビルド限定の「テストデータ生成」操作で、ノート1,000件・ページ5,000枚を **本棚フォルダとして** 作成して実機で計測 | 起動・一覧・検索の時間、外部変更の確認（NFR-P-07: 変更なし時 5秒以内） |

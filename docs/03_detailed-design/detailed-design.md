@@ -3,11 +3,11 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves 詳細設計書 |
-| 版数 | 2.3 |
+| 版数 | 2.4 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
 | ステータス | 確定 |
-| 入力文書 | [要件定義書 v1.3](../01_requirements/requirements.md) / [基本設計書 v1.2](../02_basic-design/basic-design.md) / [ADR](../adr/README.md) |
+| 入力文書 | [要件定義書 v1.5](../01_requirements/requirements.md) / [基本設計書 v1.5](../02_basic-design/basic-design.md) / [ADR](../adr/README.md) |
 
 ### 改訂履歴
 
@@ -25,6 +25,7 @@
 | 2.1 | 2026-09-28 | 9.9 事前検証 R-6・R-7 の結果を反映（ADR 0021、#38） |
 | 2.2 | 2026-09-28 | 9.9 上書きされたページ画像の反映を追加（ADR 0022） |
 | 2.3 | 2026-09-28 | ページの編集（基本設計書 v1.2 SC-11・6.11）。4.1, 4.5, 5.1〜5.2, 8, 9.12, 10, 12 章。ADR 0023 |
+| 2.4 | 2026-09-28 | 本棚の保存場所（基本設計書 v1.5 6.8・6.12）。4.5, 5.1, 9.8, 9.9, 9.13 を追加・変更。ADR 0025 |
 
 ---
 
@@ -312,7 +313,7 @@ export type OpenShelf = {
 | `shelvesRootDirectory()` | `Documents/`（本棚の親。「ファイル」アプリの Leaves） |
 | `appInternalDirectory()` | `Documents/.leaves/` |
 | `shelfInternalDirectory(shelfId)` | `Documents/.leaves/shelves/{shelfId}/` |
-| `workDirectory()` | `Documents/.leaves/work/`（組み立て中のノート。起動時に空にする）。本棚と同じボリュームに置き、完成したノートを移動（名前の付け替え）だけで置けるようにする |
+| `workDirectory(shelf)` | `本棚フォルダ/.leaves-work/`（組み立て中のノート。本棚を開いたときに空にする）。本棚が別の場所・別のボリュームにあっても、完成したノートを同じボリューム内の移動だけで置けるようにする（v2.4 で本棚フォルダの中に移した） |
 | `notebookDirectory(shelf, notebookPath)` | 本棚フォルダ ＋ 祖先から順のノートブック名 |
 | `noteDirectory(shelf, notebookPath, title)` | 上 ＋ ノート名 |
 | `pageFileName(position)` | `001.jpg` …（`position` は 0 始まり、名前は 1 始まり、`PAGE_FILE_NUMBER_DIGITS` 桁のゼロ埋め。1000 ページ目以降は桁が増える） |
@@ -405,6 +406,28 @@ export type SortOrder = 'updatedAt' | 'name';
 ```
 
 `NotebookColor` は 11 章の `NOTEBOOK_COLORS` の要素の型とする。
+
+### 5.1.1 本棚の場所（v2.4）
+
+```ts
+/** app: アプリ内（Documents 直下）、icloud: iCloud Drive、external: そのほかの選んだ場所 */
+export type ShelfLocationKind = 'app' | 'icloud' | 'external';
+/** 本棚の一覧の1行。available が false は、別の場所にアクセスできない（許可切れ・見つからない。FR-L-04） */
+export type Shelf = { id: ShelfId; name: string; location: ShelfLocationKind; available: boolean };
+```
+
+**settings.json（`storage/appSettings.ts`）**
+
+```ts
+type AppSettings = {
+  lastOpenedShelfId: ShelfId | null;
+  /** 別の場所の本棚。reference は iOS ではブックマーク（base64）、Android では永続的な許可を持つフォルダの URI */
+  externalShelves: { id: ShelfId; reference: string }[];
+};
+```
+
+- 古い形（`externalShelves` がない）は空の一覧として読む
+- アプリ内の本棚は、これまでどおり `Documents` 直下の走査で見つける（一覧には入れない）
 
 ### 5.2 管理用ファイルの型（`storage/manifest.ts`、ADR 0017）
 
@@ -877,6 +900,41 @@ export const FORBIDDEN_NAME_CHARACTERS = ['/', '\\', ':', '*', '?', '"', '<', '>
 
 ---
 
+### 9.13 別の場所の本棚（`services/shelves.ts`・`native/folderAccess.ts`、基本設計書 6.8・6.12、ADR 0025）
+
+**フォルダの参照（`native/folderAccess.ts` → `modules/folder-access`）**
+
+```ts
+export function pickFolder(): Promise<Directory | null>;        // OS のフォルダ選択画面。キャンセルは null（expo-file-system の pickDirectoryAsync）
+export function createFolderReference(folder: Directory): string;  // iOS: ブックマーク（base64）、Android: URI をそのまま
+export function openFolderReference(reference: string):             // 参照からフォルダを開き、アクセスを始める
+  { directory: Directory; refreshedReference: string | null } | null; // 開けなければ null。iOS でブックマークが古ければ作り直したものを返す
+export function locationKindOf(folder: Directory): ShelfLocationKind; // iCloud Drive かどうか（iOS: isUbiquitousItem）
+export function requestICloudDownload(item: File | Directory): void; // iOS: startDownloadingUbiquitousItem
+```
+
+- iOS のブックマーク・iCloud のダウンロードは Expo の標準機能にないため、`modules/folder-access`（iOS のみ。Android は expo-file-system の永続的な許可で足りる）を作る
+- アクセスは本棚を開いている間ずっと続ける（本棚を閉じたときに止める）
+
+**本棚の操作（9.8 に追加）**
+
+```ts
+export function createShelf(name: string, parent: Directory | null): Shelf;   // null はアプリ内
+export function openFolderAsShelf(folder: Directory): Shelf;                  // FR-L-02
+export async function moveShelf(shelf: Shelf, destinationParent: Directory, onProgress): Promise<Shelf>; // FR-L-03
+export function removeShelfFromList(shelf: Shelf): void;                       // FR-L-05
+```
+
+- `listShelves()` は「アプリ内の本棚（Documents の走査）＋ settings の別の場所の本棚（参照を開く）」を返す。開けない参照は `available: false` にし、一覧から自動では消さない
+- `moveShelf`: 移動先に同じ名前のフォルダがあれば `duplicateShelfName`。`Directory.copy` でコピー → ファイル数を数えて一致を確かめる → 元を消す → 一覧の参照を移動先に替える（アプリ内へ移したら一覧から除く）。開いている本棚なら、先に閉じて、終わったら開き直す
+- 同じ ID の本棚が2か所にある（別の場所の本棚を「開く」でもう一度選んだ、Finder で複製した）場合は、一覧にある方を開く。複製されたフォルダを開いたときは、新しい ID を振り直す
+
+**iCloud Drive の未ダウンロード（9.9 に追加）**
+- 走査で、名前が `.` で始まり `.icloud` で終わるファイル（iCloud の未ダウンロードの印）を見つけたら、`requestICloudDownload` を呼ぶ
+- そのフォルダは「ダウンロード待ち」として中身を読まず、DB の前回の状態（子のノートブック・ノート・ページ）をそのまま走査結果に入れる。消えたとはみなさない（NFR-R-06）
+- ダウンロード待ちがあった場合は、`ICLOUD_RESYNC_DELAY_MS` 後にもう一度反映する（最大 `ICLOUD_RESYNC_MAX_TIMES` 回）
+- 未ダウンロードの見え方（`.名前.icloud` か、中身のないファイルか）は事前検証 R-10 で確かめ、違えば本節を直す
+
 ### 9.12 ページの編集（`services/pageEdits.ts`、基本設計書 6.11）
 
 ```ts
@@ -990,6 +1048,8 @@ export function pickImages(): Promise<CapturedImage[] | null>;
 | `OCR_TEXT_HEIGHT_RATIO` | 0.85 | 透明テキストの文字サイズ ÷ 行の高さ（行の上下の余白分を引く） |
 | `NOTEBOOK_COLORS` | 6色 | 基本設計書 2.2 の表紙色 |
 | `DEFAULT_EXPORT_FILE_NAME` | `'Leaves'` | ファイル名が空になったときの代わり |
+| `ICLOUD_RESYNC_DELAY_MS` | 5000 | iCloud のダウンロード待ちがあったとき、次の反映までの時間 |
+| `ICLOUD_RESYNC_MAX_TIMES` | 6 | 上の再反映の回数の上限（約30秒）。それ以降は次に前面に戻ったときに反映する |
 | `EDIT_MAGNIFIER_SCALE` | 2 | SC-11 の拡大鏡の倍率。四隅を紙の角に合わせやすくする |
 | `DEFAULT_SHELF_NAME` | `'マイ本棚'` | SC-9 の名前の初期値、v1.0 のデータの移行先（基本設計書 4.3, 6.9） |
 | `PAGE_FILE_NUMBER_DIGITS` | 3 | ページのファイル名の桁数（`001.jpg`）。Finder で 999 ページまで番号順に並ぶ |
@@ -1060,3 +1120,13 @@ Expo 管理下のパッケージ（expo-*、react-native-reanimated、react-nati
 5. **外部変更の反映**: `sync/` 一式と前面復帰時の呼び出し
 6. **移行**: v1.0 のデータの移行、テストデータ生成の書き換え
 7. **確認**: シミュレータの「ファイル」アプリでの外部変更、性能計測、実機
+
+**v2.4（本棚の保存場所）の進め方**
+
+1. **事前検証**: R-11（Android の別の場所。エミュレータでフォルダを選び、作成・一覧・移動・更新日時を試す）。R-10（iOS のブックマークと iCloud）はネイティブモジュールを作ってから、iPhone 実機で利用者に確かめてもらう（シミュレータではフォルダ選択画面を操作できないため）
+2. **土台**: `ShelfLocationKind`・settings の拡張、作業用フォルダを本棚フォルダ内へ、`modules/folder-access`
+3. **本棚の操作**: 作成（場所の選択）・既存のフォルダを開く・場所を移す・一覧から外す・アクセスできない本棚の扱い
+4. **iCloud**: 未ダウンロードの扱い
+5. **画面**: SC-9・SC-10
+6. **確認**: 単体テスト（node の fs の偽物に「別の場所」のフォルダを作る）、Android エミュレータ、iPhone 実機（iCloud Drive）
+

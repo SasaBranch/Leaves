@@ -63,3 +63,4 @@ ADR は「なぜその方式を選んだか」「何を捨てたか」を判断�
 | [0022](0022-refresh-overwritten-pages-on-open.md) | 上書きされたページ画像は、ノートを開いたときに確かめて反映する | 承認 |
 | [0023](0023-local-module-for-perspective-correction.md) | 保存後のページの台形補正は、自作の Expo モジュールで両 OS の画像処理機能を使う | 承認 |
 | [0024](0024-sqlite-close-without-finalizing-all.md) | SQLite を閉じる前の「残っている文の一括の片づけ」を切る | 承認 |
+| [0025](0025-external-shelf-locations.md) | 別の場所の本棚は、アプリの設定に参照を持ち、iOS はブックマークでアクセスを保つ | 承認 |

@@ -101,14 +101,7 @@ export async function upsertNote(db: Db, note: IndexedNote): Promise<void> {
        notebook_id = excluded.notebook_id, title = excluded.title,
        created_at = excluded.created_at, updated_at = excluded.updated_at,
        scanned_modified_at = excluded.scanned_modified_at`,
-    [
-      note.id,
-      note.notebookId,
-      note.title,
-      note.createdAt,
-      note.updatedAt,
-      note.scannedModifiedAt,
-    ],
+    [note.id, note.notebookId, note.title, note.createdAt, note.updatedAt, note.scannedModifiedAt],
   );
 }
 

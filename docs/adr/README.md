@@ -62,3 +62,4 @@ ADR は「なぜその方式を選んだか」「何を捨てたか」を判断�
 | [0021](0021-spike-r6-r7-file-sharing-and-scan.md) | 事前検証 R-6・R-7 の結果、フォルダの更新日時は `new File(フォルダ).modificationTime` で読む | 承認 |
 | [0022](0022-refresh-overwritten-pages-on-open.md) | 上書きされたページ画像は、ノートを開いたときに確かめて反映する | 承認 |
 | [0023](0023-local-module-for-perspective-correction.md) | 保存後のページの台形補正は、自作の Expo モジュールで両 OS の画像処理機能を使う | 承認 |
+| [0024](0024-sqlite-close-without-finalizing-all.md) | SQLite を閉じる前の「残っている文の一括の片づけ」を切る | 承認 |

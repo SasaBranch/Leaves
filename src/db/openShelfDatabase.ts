@@ -3,7 +3,7 @@ import type { Directory } from 'expo-file-system';
 import { deleteDatabaseAsync, openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 
 import { createDb, type Db } from './db';
-import { createExpoSqliteDriver } from './expoSqliteDriver';
+import { createExpoSqliteDriver, SQLITE_OPEN_OPTIONS } from './expoSqliteDriver';
 import { configureConnection, migrateDatabase } from './migrations';
 
 const DATABASE_FILE_NAME = 'index.db';
@@ -27,7 +27,11 @@ export async function openShelfDatabase(
 }
 
 async function openAndMigrate(directoryPath: string) {
-  const database: SQLiteDatabase = await openDatabaseAsync(DATABASE_FILE_NAME, undefined, directoryPath);
+  const database: SQLiteDatabase = await openDatabaseAsync(
+    DATABASE_FILE_NAME,
+    SQLITE_OPEN_OPTIONS,
+    directoryPath,
+  );
   const db = createDb(createExpoSqliteDriver(database));
   await configureConnection(db);
   await migrateDatabase(db);

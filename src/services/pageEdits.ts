@@ -3,19 +3,19 @@
 import { type Directory, File } from 'expo-file-system';
 
 import { PAGE_IMAGE_JPEG_QUALITY, PAGE_IMAGE_MAX_EDGE_PX } from '@/config';
-import { markNoteUpdated } from '@/db/noteRepository';
-import { findPage, resetPageForReplacedImage } from '@/db/pageRepository';
+import { findPage } from '@/db/pageRepository';
 import { AppError } from '@/domain/errors';
 import type { PageEdit, PageId } from '@/domain/types';
 import { correctPageImage } from '@/native/pageImageEditor';
 import { notifyDataChanged } from '@/state/dataChanges';
 import type { OpenShelf } from '@/state/openShelf';
-import { writeManifest, type NoteManifest, type PageManifest } from '@/storage/manifest';
-import { readImageSize, regenerateThumbnail } from '@/storage/pageImages';
+import type { NoteManifest, PageManifest } from '@/storage/manifest';
+import { readImageSize } from '@/storage/pageImages';
 import { originalImageFile, originalsDirectory } from '@/storage/paths';
 
 import { getNoteWithDirectory, readNoteManifest } from './folders';
 import { enqueueOcr } from './ocrQueue';
+import { describeReplacedPage, saveReplacedPages } from './replacedPageImages';
 
 /** 編集画面に出すもの: 元の画像（未編集ならページ画像）と、前回の編集（未編集なら null） */
 export async function findPageEditSource(
@@ -47,7 +47,7 @@ export async function editPage(shelf: OpenShelf, pageId: PageId, edit: PageEdit)
     });
     // 補正した画像を書き終えてから置き換える（途中で終了しても、ページ画像が欠けないように）
     replaceFile(pageImage, new File(corrected.uri));
-    return { edit, size: { width: corrected.width, height: corrected.height } };
+    return { edit };
   });
 }
 
@@ -57,48 +57,34 @@ export async function revertPageEdit(shelf: OpenShelf, pageId: PageId): Promise<
     const original = originalImageFile(directory, pageId);
     if (!original.exists) return null;
     replaceFile(new File(directory, page.file), original);
-    return { edit: null, size: null };
+    return { edit: null };
   });
 }
 
-type EditOutcome = { edit: PageEdit | null; size: { width: number; height: number } | null };
-
 /**
- * 編集の共通の段落: ページ画像を置き換える（replace）→ サムネイルを作り直す →
- * .leaves.json → DB の順に反映 → 文字認識をやり直す。失敗したら pageEditFailed
+ * 編集の共通の段落: ページ画像を置き換える（replace が新しい編集の内容を返す。null なら何もしない）→
+ * 派生データを作り直して反映する → 文字認識をやり直す。失敗したら pageEditFailed
  */
 async function runPageEdit(
   shelf: OpenShelf,
   pageId: PageId,
-  replace: (target: { directory: Directory; page: PageManifest }) => Promise<EditOutcome | null>,
+  replace: (target: {
+    directory: Directory;
+    page: PageManifest;
+  }) => Promise<{ edit: PageEdit | null } | null>,
 ): Promise<void> {
   const edited = await shelf
     .runExclusively(async () => {
       const target = await locatePage(shelf, pageId);
       const outcome = await replace(target);
       if (!outcome) return false;
-      const pageImage = new File(target.directory, target.page.file);
-      const size = await regenerateThumbnail(shelf.id, pageId, pageImage);
-      const now = new Date().toISOString();
-      const updated: PageManifest = {
-        ...target.page,
-        ...(outcome.size ?? size),
-        size: pageImage.size ?? 0,
-        modifiedAt: pageImage.modificationTime ?? 0,
-        ocrStatus: 'pending',
-        ocrText: '',
-        ocrLines: [],
-        edit: outcome.edit,
-      };
-      writeManifest(target.directory, {
-        ...target.manifest,
-        updatedAt: now,
-        pages: target.manifest.pages.map((page) => (page.id === pageId ? updated : page)),
-      });
-      await shelf.db.transaction(async (tx) => {
-        await resetPageForReplacedImage(tx, pageId, updated, now);
-        await markNoteUpdated(tx, target.noteId, now);
-      });
+      const replaced = await describeReplacedPage(
+        shelf.id,
+        target.directory,
+        target.page,
+        outcome.edit,
+      );
+      await saveReplacedPages(shelf, target, [replaced], new Date().toISOString());
       return true;
     })
     .catch((error: unknown) => {

@@ -9,6 +9,7 @@ import type { OpenShelf } from '@/state/openShelf';
 import { readManifest, type NoteManifest } from '@/storage/manifest';
 import { originalImageFile, thumbnailFile } from '@/storage/paths';
 
+import { fakeImageManipulator } from '../../test/fakeImageManipulator';
 import { nodePathOf } from '../../test/nodeFileSystem';
 import { createTestShelf } from '../../test/testShelf';
 import { createNoteFromCapture } from './capture';
@@ -67,6 +68,11 @@ beforeEach(async () => {
 
 test('初めての編集: 元の画像を残し、補正した画像でページを置き換え、文字認識をやり直す', async () => {
   const [first] = pageIds;
+  // 大きさは補正後のファイルから読む（画像変換の偽物に、補正後の大きさを教えておく）
+  fakeImageManipulator.sizes.set(new File(noteFolder(), '001.jpg').uri, {
+    width: 1200,
+    height: 900,
+  });
   await editPage(shelf, first!, EDIT);
 
   expect(originalImageFile(noteFolder(), first!).textSync()).toBe('one');

@@ -20,6 +20,7 @@ import { useTheme } from '@/theme/useTheme';
 import { ActionMenu, type ActionMenuItem } from '@/ui/components/ActionMenu';
 import { TextPromptModal } from '@/ui/components/TextPromptModal';
 import { errorMessages } from '@/ui/errorMessages';
+import { showingErrors } from '@/ui/showingErrors';
 
 type Menu = { title: string; items: ActionMenuItem[] };
 type Prompt = {
@@ -225,18 +226,6 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <View style={[styles.card, { backgroundColor: colors.surface }]}>{children}</View>
     </View>
   );
-}
-
-/** 入力エラー（同名・空の名前）を知らせ、ダイアログは閉じずに入力し直してもらう */
-function showingErrors(submit: (value: string) => Promise<void>) {
-  return async (value: string) => {
-    try {
-      await submit(value);
-    } catch (error) {
-      Alert.alert(isAppError(error) ? errorMessages[error.kind] : '保存できませんでした');
-      throw error;
-    }
-  };
 }
 
 function alertFailure(fallback: string) {

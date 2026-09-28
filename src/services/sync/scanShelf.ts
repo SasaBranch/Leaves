@@ -8,6 +8,7 @@ import { pickAvailableName } from '@/domain/name';
 import type { IsoDateTime, NotebookColor, NotebookId, NoteId, ShelfId } from '@/domain/types';
 import { newNotebookId, newNoteId, newPageId } from '@/native/randomId';
 import {
+  isNoteManifest,
   newNotebookManifest,
   newNoteManifest,
   readManifest,
@@ -111,7 +112,13 @@ async function visitChildFolder(
       await visitUnchangedNotebookFolder(context, folder, known.notebook.id);
     } else if (known?.kind === 'note') {
       context.seenIds.add(known.note.id);
-      context.result.notes.push({ ...known.note, notebookId: parentId, title: name, directory: folder, pages: null });
+      context.result.notes.push({
+        ...known.note,
+        notebookId: parentId,
+        title: name,
+        directory: folder,
+        pages: null,
+      });
     } else {
       await visitFolderByManifest(context, folder, parentId, name, modifiedAt);
     }
@@ -124,10 +131,7 @@ function findUnchangedChild(
   parentId: NotebookId | null,
   name: string,
   modifiedAt: number,
-):
-  | { kind: 'notebook'; notebook: IndexedNotebook }
-  | { kind: 'note'; note: IndexedNote }
-  | null {
+): { kind: 'notebook'; notebook: IndexedNotebook } | { kind: 'note'; note: IndexedNote } | null {
   const notebook = index.notebooks.find(
     (candidate) =>
       candidate.parentId === parentId &&
@@ -152,7 +156,7 @@ async function visitFolderByManifest(
   modifiedAt: number,
 ): Promise<void> {
   const manifest = readManifest(folder);
-  if (manifest?.kind === 'note') {
+  if (isNoteManifest(manifest)) {
     await visitNoteFolder(context, folder, parentId, name, modifiedAt, manifest);
     return;
   }

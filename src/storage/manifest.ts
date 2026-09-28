@@ -95,6 +95,14 @@ function parseManifestFile(file: File): Manifest | null {
   }
 }
 
+/**
+ * フォルダの種類の規則（ADR 0017）: kind: note の印があるフォルダだけがノート。
+ * 印がない・壊れている・ノートブックの印のフォルダは、すべてノートブックとして扱う
+ */
+export function isNoteManifest(manifest: Manifest | null): manifest is NoteManifest {
+  return manifest?.kind === 'note';
+}
+
 export function newShelfManifest(id: ShelfId, now: IsoDateTime): ShelfManifest {
   return { kind: 'shelf', version: MANIFEST_VERSION, id, createdAt: now };
 }
@@ -107,11 +115,7 @@ export function newNotebookManifest(
   return { kind: 'notebook', version: MANIFEST_VERSION, id, color, createdAt: now, updatedAt: now };
 }
 
-export function newNoteManifest(
-  id: NoteId,
-  pages: PageManifest[],
-  now: IsoDateTime,
-): NoteManifest {
+export function newNoteManifest(id: NoteId, pages: PageManifest[], now: IsoDateTime): NoteManifest {
   return { kind: 'note', version: MANIFEST_VERSION, id, createdAt: now, updatedAt: now, pages };
 }
 
@@ -133,8 +137,7 @@ function isManifest(value: unknown): value is Manifest {
       return true;
     case 'notebook':
       return (
-        (NOTEBOOK_COLORS as readonly unknown[]).includes(value.color) &&
-        isString(value.updatedAt)
+        (NOTEBOOK_COLORS as readonly unknown[]).includes(value.color) && isString(value.updatedAt)
       );
     case 'note':
       return (
@@ -166,7 +169,10 @@ function isPageManifest(value: unknown): value is PageManifest {
 function isPageEdit(value: unknown): value is PageEdit {
   return (
     isObject(value) &&
-    (value.rotation === 0 || value.rotation === 90 || value.rotation === 180 || value.rotation === 270) &&
+    (value.rotation === 0 ||
+      value.rotation === 90 ||
+      value.rotation === 180 ||
+      value.rotation === 270) &&
     Array.isArray(value.corners) &&
     value.corners.length === 4 &&
     value.corners.every((corner) => isObject(corner) && isNumber(corner.x) && isNumber(corner.y))

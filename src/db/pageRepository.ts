@@ -158,7 +158,7 @@ export async function deletePage(db: Db, id: PageId): Promise<void> {
   await db.run('DELETE FROM pages WHERE id = ?', [id]);
 }
 
-/** 整合性チェック用: DB にあるすべてのページ ID */
+/** DB にあるすべてのページ ID（テストデータ生成でサムネイルの見本を探すのに使う） */
 export async function listAllPageIds(db: Db): Promise<PageId[]> {
   const rows = await db.all<{ id: string }>('SELECT id FROM pages');
   return rows.map((row) => row.id as PageId);

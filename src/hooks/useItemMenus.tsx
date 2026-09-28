@@ -20,6 +20,7 @@ import { useShelf } from '@/state/openShelf';
 import { ActionMenu, type ActionMenuItem } from '@/ui/components/ActionMenu';
 import { TextPromptModal } from '@/ui/components/TextPromptModal';
 import { errorMessages } from '@/ui/errorMessages';
+import { showingErrors } from '@/ui/showingErrors';
 
 /** 表紙色の選択肢の表示名（NOTEBOOK_COLORS と同じ順） */
 const COLOR_NAMES = ['モス', 'ティール', 'ブラウン', 'リーフ', 'スレート', 'ワイン'];
@@ -167,16 +168,4 @@ export function useItemMenus(): {
   );
 
   return { openNotebookMenu, openNoteMenu, openCreateNotebook, menusElement };
-}
-
-/** 入力エラー（同名・空の名前）を知らせ、ダイアログは閉じずに入力し直してもらう */
-function showingErrors(submit: (value: string) => Promise<void>) {
-  return async (value: string) => {
-    try {
-      await submit(value);
-    } catch (error) {
-      Alert.alert(isAppError(error) ? errorMessages[error.kind] : '保存できませんでした');
-      throw error;
-    }
-  };
 }

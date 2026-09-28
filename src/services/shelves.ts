@@ -11,7 +11,7 @@ import type { Shelf, ShelfId } from '@/domain/types';
 import { newShelfId } from '@/native/randomId';
 import type { OpenShelf } from '@/state/openShelf';
 import { writeAppSettings } from '@/storage/appSettings';
-import { newShelfManifest, readManifest, writeManifest } from '@/storage/manifest';
+import { isNoteManifest, newShelfManifest, readManifest, writeManifest } from '@/storage/manifest';
 import {
   entryName,
   isHiddenEntryName,
@@ -21,6 +21,7 @@ import {
   shelvesRootDirectory,
 } from '@/storage/paths';
 
+import { hasEntryNamed } from './folders';
 import { stopOcrQueue } from './ocrQueue';
 
 /**
@@ -106,10 +107,7 @@ function ensureShelfManifest(directory: Directory): ShelfId {
 }
 
 function rejectDuplicateShelfName(name: string): void {
-  const isTaken = shelvesRootDirectory()
-    .list()
-    .some((entry) => isSameName(entryName(entry), name));
-  if (isTaken) throw new AppError('duplicateShelfName');
+  if (hasEntryNamed(shelvesRootDirectory(), name)) throw new AppError('duplicateShelfName');
 }
 
 function removeOrphanInternalData(shelfIds: Set<ShelfId>): void {
@@ -126,7 +124,7 @@ function countFolders(directory: Directory): { notebooks: number; notes: number 
   const visit = (folder: Directory) => {
     for (const entry of folder.list()) {
       if (!(entry instanceof Directory) || isHiddenEntryName(entry.name)) continue;
-      if (readManifest(entry)?.kind === 'note') {
+      if (isNoteManifest(readManifest(entry))) {
         count.notes++;
       } else {
         count.notebooks++;

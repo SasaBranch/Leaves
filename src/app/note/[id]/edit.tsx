@@ -44,6 +44,8 @@ const STAGE_PADDING = 24;
 /** 拡大鏡の直径と、指からずらす距離（指で隠れないように上に出す） */
 const MAGNIFIER_SIZE = 112;
 const MAGNIFIER_OFFSET = 80;
+/** 拡大鏡の中心に出す印の直径（指の下の位置を示す） */
+const CROSSHAIR_SIZE = 12;
 
 type EditSource = Awaited<ReturnType<typeof findPageEditSource>>;
 
@@ -474,11 +476,11 @@ const styles = StyleSheet.create({
   },
   crosshair: {
     position: 'absolute',
-    left: MAGNIFIER_SIZE / 2 - 6,
-    top: MAGNIFIER_SIZE / 2 - 6,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    left: (MAGNIFIER_SIZE - CROSSHAIR_SIZE) / 2,
+    top: (MAGNIFIER_SIZE - CROSSHAIR_SIZE) / 2,
+    width: CROSSHAIR_SIZE,
+    height: CROSSHAIR_SIZE,
+    borderRadius: CROSSHAIR_SIZE / 2,
     borderWidth: 1.5,
   },
   toolbar: { flexDirection: 'row', justifyContent: 'center', paddingBottom: 8 },

@@ -20,6 +20,7 @@ import { ActionMenu } from '@/ui/components/ActionMenu';
 import { NotebookPicker, NotebookPickerHeader } from '@/ui/components/NotebookPicker';
 import { TextPromptModal } from '@/ui/components/TextPromptModal';
 import { errorMessages } from '@/ui/errorMessages';
+import { showingErrors } from '@/ui/showingErrors';
 
 const PAGE_PREVIEW_WIDTH = 128;
 const PAGE_PREVIEW_HEIGHT = 171;
@@ -88,14 +89,7 @@ export default function CaptureScreen() {
     if (added) setImages((current) => [...current, ...added]);
   }
 
-  async function renameTitle(value: string) {
-    try {
-      setTitle(validateName(value));
-    } catch (error) {
-      Alert.alert(isAppError(error) ? errorMessages[error.kind] : '名前を変更できませんでした');
-      throw error; // ダイアログを閉じずに入力し直してもらう
-    }
-  }
+  const renameTitle = showingErrors((value) => setTitle(validateName(value)));
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.bg }]}>

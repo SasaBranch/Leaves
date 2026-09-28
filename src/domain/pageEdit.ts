@@ -10,8 +10,6 @@ export const FULL_IMAGE_CORNERS: PageEdit['corners'] = [
   { x: 0, y: 1 },
 ];
 
-export const UNEDITED: PageEdit = { corners: FULL_IMAGE_CORNERS, rotation: 0 };
-
 /** 回転ボタン: 右に 90° */
 export function rotateClockwise(rotation: PageRotation): PageRotation {
   return ((rotation + 90) % 360) as PageRotation;

@@ -81,6 +81,9 @@ export default function SettingsScreen() {
     // 変更後はフォルダの場所（OpenShelf.directory）が変わるので開き直す
     const renamed = await openShelf.runExclusively(async () => renameShelf(shelf, name));
     await switchShelf(renamed);
+    // 同じ本棚を開き直すだけなので画面は作り直されない。一覧を読み直して新しい名前にする
+    // （古い名前のまま次の操作をすると、もうないフォルダを探して失敗するため）
+    reload();
   }
 
   /** 中身の件数を示してから確認する（FR-V-05。ゴミ箱がないため） */

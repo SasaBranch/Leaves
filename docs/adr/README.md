@@ -57,3 +57,5 @@ ADR は「なぜその方式を選んだか」「何を捨てたか」を判断�
 | [0016](0016-shelf-folders-are-source-of-truth.md) | 本棚のフォルダを正本とし、SQLite は索引・キャッシュにする | 承認 |
 | [0017](0017-leaves-json-identifies-folders.md) | フォルダの種類と ID は、各フォルダの `.leaves.json` で表す | 承認 |
 | [0018](0018-internal-data-outside-shelf.md) | 索引 DB・サムネイル・設定は、本棚の外の `Documents/.leaves/` に置く | 承認 |
+| [0019](0019-fake-expo-file-system-on-node-fs.md) | ファイル操作は expo-file-system を直接使い、テストでは node の fs で動く偽物に差し替える | 承認 |
+| [0020](0020-sync-skips-unchanged-folders.md) | 走査はフォルダの更新日時で中身の確認を省き、アプリ自身の変更では記録を更新しない | 承認 |

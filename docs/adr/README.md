@@ -65,3 +65,4 @@ ADR は「なぜその方式を選んだか」「何を捨てたか」を判断�
 | [0024](0024-sqlite-close-without-finalizing-all.md) | SQLite を閉じる前の「残っている文の一括の片づけ」を切る | 承認 |
 | [0025](0025-external-shelf-locations.md) | 別の場所の本棚は、アプリの設定に参照を持ち、iOS はブックマークでアクセスを保つ | 承認 |
 | [0026](0026-android-app-internal-shelves-only.md) | Android の「別の場所」の本棚は見送り、アプリ内の本棚だけにする | 承認 |
+| [0027](0027-spike-r4-r5-android-emulator.md) | 事前検証 R-4・R-5 の結果、UI ライブラリはそのまま採用し、アプリサイズは許容する。Android のフォルダ更新日時は `Directory.info()` で読む | 承認 |

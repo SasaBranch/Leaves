@@ -58,5 +58,6 @@ ADR は「なぜその方式を選んだか」「何を捨てたか」を判断�
 | [0017](0017-leaves-json-identifies-folders.md) | フォルダの種類と ID は、各フォルダの `.leaves.json` で表す | 承認 |
 | [0018](0018-internal-data-outside-shelf.md) | 索引 DB・サムネイル・設定は、本棚の外の `Documents/.leaves/` に置く | 承認 |
 | [0019](0019-fake-expo-file-system-on-node-fs.md) | ファイル操作は expo-file-system を直接使い、テストでは node の fs で動く偽物に差し替える | 承認 |
-| [0020](0020-sync-skips-unchanged-folders.md) | 走査はフォルダの更新日時で中身の確認を省き、アプリ自身の変更では記録を更新しない | 承認 |
+| [0020](0020-sync-skips-unchanged-folders.md) | 走査はフォルダの更新日時で中身の確認を省き、アプリ自身の変更では記録を更新しない | 承認（上書きの扱いは 0022 で補う） |
 | [0021](0021-spike-r6-r7-file-sharing-and-scan.md) | 事前検証 R-6・R-7 の結果、フォルダの更新日時は `new File(フォルダ).modificationTime` で読む | 承認 |
+| [0022](0022-refresh-overwritten-pages-on-open.md) | 上書きされたページ画像は、ノートを開いたときに確かめて反映する | 承認 |

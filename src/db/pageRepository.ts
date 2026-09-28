@@ -124,6 +124,20 @@ export async function saveOcrResult(
   );
 }
 
+/** 画像が差し替えられたページ: 大きさを直し、文字認識をやり直す状態に戻す（ADR 0022） */
+export async function resetPageForReplacedImage(
+  db: Db,
+  id: PageId,
+  size: { width: number; height: number },
+  now: IsoDateTime,
+): Promise<void> {
+  await db.run(
+    `UPDATE pages SET width = ?, height = ?, ocr_status = 'pending', ocr_text = '', ocr_lines = '[]',
+       updated_at = ? WHERE id = ?`,
+    [size.width, size.height, now, id],
+  );
+}
+
 export async function listPageIdsByOcrStatus(db: Db, status: OcrStatus): Promise<PageId[]> {
   const rows = await db.all<{ id: string }>(
     'SELECT id FROM pages WHERE ocr_status = ? ORDER BY created_at, position',

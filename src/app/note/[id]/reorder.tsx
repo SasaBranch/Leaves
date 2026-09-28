@@ -15,6 +15,7 @@ import { useNote } from '@/hooks/useNote';
 import { deletePage, reorderPages } from '@/services/notes';
 import { useShelf } from '@/state/openShelf';
 import { thumbnailFile } from '@/storage/paths';
+import { storedImageSource } from '@/ui/imageSource';
 import { useTheme } from '@/theme/useTheme';
 
 /** 1列で中身が見分けられる大きさ */
@@ -23,7 +24,7 @@ const THUMBNAIL_WIDTH = 120;
 export default function ReorderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const noteId = id as NoteId;
-  const { pages, isChanged, reorder, removeFromOrder } = usePageOrder(noteId);
+  const { pages, version, isChanged, reorder, removeFromOrder } = usePageOrder(noteId);
   const confirmDelete = useConfirmDeletePage(pages.length, removeFromOrder);
   const shelf = useShelf();
   const { colors } = useTheme();
@@ -49,7 +50,12 @@ export default function ReorderScreen() {
           keyExtractor={(page) => page.id}
           onReorder={({ from, to }) => reorder(from, to)}
           renderItem={({ item, index }) => (
-            <PageRow page={item} pageNumber={index + 1} onDelete={() => confirmDelete(item)} />
+            <PageRow
+              page={item}
+              version={version}
+              pageNumber={index + 1}
+              onDelete={() => confirmDelete(item)}
+            />
           )}
           contentContainerStyle={styles.list}
         />
@@ -68,6 +74,8 @@ function usePageOrder(noteId: NoteId) {
   const pages = orderedPages ?? data?.pages ?? [];
   return {
     pages,
+    /** サムネイルのキャッシュを差し替えに追従させるためのノートの更新日時 */
+    version: data?.note.updatedAt ?? '',
     isChanged: orderedPages !== undefined,
     reorder: (from: number, to: number) => setOrderedPages(reorderItems(pages, from, to)),
     removeFromOrder: (pageId: PageId) =>
@@ -130,10 +138,12 @@ function Header({ onDone }: { onDone: () => void }) {
 
 function PageRow({
   page,
+  version,
   pageNumber,
   onDelete,
 }: {
   page: Page;
+  version: string;
   pageNumber: number;
   onDelete: () => void;
 }) {
@@ -149,7 +159,7 @@ function PageRow({
     >
       <GripVertical size={20} color={colors.muted} />
       <Image
-        source={{ uri: thumbnailFile(shelf.id, page.id).uri }}
+        source={storedImageSource(thumbnailFile(shelf.id, page.id), version)}
         style={[
           styles.thumbnail,
           { aspectRatio: page.width / page.height, backgroundColor: colors.paper },

@@ -15,7 +15,7 @@ import {
   Trash2,
   Type,
 } from 'lucide-react-native';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fitContainer, Gallery, type GalleryRefType } from 'react-native-zoom-toolkit';
@@ -28,8 +28,10 @@ import { useNote } from '@/hooks/useNote';
 import { shareExport, type ExportFormat } from '@/services/export/shareExport';
 import { deleteNote, renameNote } from '@/services/notes';
 import { retryOcr } from '@/services/ocrQueue';
+import { refreshReplacedPages } from '@/services/sync/refreshReplacedPages';
 import { useShelf } from '@/state/openShelf';
 import { pageImageFile, thumbnailFile } from '@/storage/paths';
+import { storedImageSource } from '@/ui/imageSource';
 import { useTheme } from '@/theme/useTheme';
 import { ActionMenu, type ActionMenuItem } from '@/ui/components/ActionMenu';
 import { OcrStatusChip } from '@/ui/components/OcrStatusChip';
@@ -57,6 +59,7 @@ export default function NoteScreen() {
   const shelf = useShelf();
   const { colors, fonts } = useTheme();
   const { scan, importPhotos } = useCaptureLauncher({ noteId });
+  useRefreshReplacedPages(noteId);
 
   if (!data) return <View style={{ flex: 1, backgroundColor: colors.stage }} />;
   const { note, pages, notebookPath, noteDirectory } = data;
@@ -138,11 +141,17 @@ export default function NoteScreen() {
       <PageGallery
         pages={pages}
         noteDirectory={noteDirectory}
+        version={note.updatedAt}
         initialIndex={currentIndex}
         galleryRef={galleryRef}
         onIndexChange={setCurrentIndex}
       />
-      <PageStrip pages={pages} currentIndex={currentIndex} onSelect={showPage} />
+      <PageStrip
+        pages={pages}
+        version={note.updatedAt}
+        currentIndex={currentIndex}
+        onSelect={showPage}
+      />
 
       <BottomSheet
         snapPoints={SHEET_SNAP_POINTS}
@@ -200,16 +209,32 @@ export default function NoteScreen() {
   );
 }
 
+/**
+ * 開いたノートのページ画像が外部で上書きされていないか確かめ、されていればサムネイルと文字認識をやり直す。
+ * 上書きはフォルダの更新日時を変えないため、起動時・前面復帰時の反映では気づけない（ADR 0022）
+ */
+function useRefreshReplacedPages(noteId: NoteId) {
+  const shelf = useShelf();
+  useEffect(() => {
+    refreshReplacedPages(shelf, noteId).catch((error: unknown) =>
+      console.warn('上書きされたページの確認に失敗しました', error),
+    );
+  }, [shelf, noteId]);
+}
+
 /** ページを左右スワイプで切り替え、ピンチで拡大する（FR-N-01〜02） */
 function PageGallery({
   pages,
   noteDirectory,
+  version,
   initialIndex,
   galleryRef,
   onIndexChange,
 }: {
   pages: Page[];
   noteDirectory: Directory;
+  /** 画像のキャッシュを差し替えに追従させるためのノートの更新日時 */
+  version: string;
   initialIndex: number;
   galleryRef: React.RefObject<GalleryRefType | null>;
   onIndexChange: (index: number) => void;
@@ -226,7 +251,7 @@ function PageGallery({
           onIndexChange={onIndexChange}
           renderItem={(page) => (
             <Image
-              source={{ uri: pageImageFile(noteDirectory, page.position).uri }}
+              source={storedImageSource(pageImageFile(noteDirectory, page.position), version)}
               style={fitContainer(page.width / page.height, {
                 width: size.width - PAGE_MARGIN * 2,
                 height: size.height - PAGE_MARGIN * 2,
@@ -244,10 +269,12 @@ function PageGallery({
 /** ページの小さなサムネイル列。今のページを accent の枠で示す */
 function PageStrip({
   pages,
+  version,
   currentIndex,
   onSelect,
 }: {
   pages: Page[];
+  version: string;
   currentIndex: number;
   onSelect: (index: number) => void;
 }) {
@@ -276,7 +303,7 @@ function PageStrip({
             ]}
           >
             <Image
-              source={{ uri: thumbnailFile(shelf.id, page.id).uri }}
+              source={storedImageSource(thumbnailFile(shelf.id, page.id), version)}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
             />

@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NoteSummary } from '@/domain/types';
 import { useShelf } from '@/state/openShelf';
 import { thumbnailFile } from '@/storage/paths';
+import { storedImageSource } from '@/ui/imageSource';
 import { useTheme } from '@/theme/useTheme';
 import { formatListDate } from '@/ui/formatDate';
 
@@ -38,7 +39,7 @@ export function NoteCover({
         ]}
       >
         <Image
-          source={{ uri: thumbnailFile(shelf.id, note.coverPageId).uri }}
+          source={storedImageSource(thumbnailFile(shelf.id, note.coverPageId), note.updatedAt)}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           recyclingKey={note.coverPageId}

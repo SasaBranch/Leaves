@@ -84,8 +84,18 @@ export async function importExternalImage(
 /** サムネイルがなければ作る（DB を作り直したときなど。ページ画像から作る） */
 export async function ensureThumbnail(shelfId: ShelfId, pageId: PageId, pageImage: File) {
   if (thumbnailFile(shelfId, pageId).exists || !pageImage.exists) return;
+  await regenerateThumbnail(shelfId, pageId, pageImage);
+}
+
+/** ページ画像からサムネイルを作り直し、ページ画像の大きさを返す（外部で画像が上書きされたとき。ADR 0022） */
+export async function regenerateThumbnail(
+  shelfId: ShelfId,
+  pageId: PageId,
+  pageImage: File,
+): Promise<{ width: number; height: number }> {
   const size = await readImageSize(pageImage.uri);
   await storeThumbnail({ uri: pageImage.uri, ...size }, shelfId, pageId);
+  return size;
 }
 
 async function storeThumbnail(image: CapturedImage, shelfId: ShelfId, pageId: PageId) {

@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves 詳細設計書 |
-| 版数 | 2.0 |
+| 版数 | 2.1 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
 | ステータス | 確定 |
@@ -22,6 +22,7 @@
 | 1.5 | 2026-09-28 | 12 章 テストデータ生成の扱いを実装に合わせて更新（#32） |
 | 1.6 | 2026-09-28 | 9.6 整合性チェックを前回が途中で終わったときだけに変更（ADR 0015、#33） |
 | 2.0 | 2026-09-28 | 本棚と、本棚フォルダを正本とする保存方式に対応（基本設計書 v1.1、ADR 0016〜0020）。2, 3.2〜3.3, 4, 5, 6.1〜6.2, 7〜12, 14 章。9.8〜9.11 を追加 |
+| 2.1 | 2026-09-28 | 9.9 事前検証 R-6・R-7 の結果を反映（ADR 0021、#38） |
 
 ---
 
@@ -825,7 +826,9 @@ export async function syncShelf(shelf: OpenShelf): Promise<void> {
 
 **差分（`diffIndex`、純粋関数）**: 走査結果と DB を ID で比べ、`{ upsertedNotebooks, upsertedNotes, replacedPagesByNote, deletedNotebookIds, deletedNoteIds, removedPageIds, pendingPageIds }` を返す。DB で `processing` のページは、`.leaves.json` が `pending` でも `processing` のままにする（認識中の結果を上書きしないため）。
 
-- フォルダの更新日時は `Directory.info().modificationTime`（R-6: 中の追加・削除・名前変更で変わることを確認済み）
+- フォルダの更新日時は `new File(フォルダの uri).modificationTime` で読む（`Directory.info()` は中の全ファイルのサイズを合計するため遅い。ADR 0021）。中の追加・削除・名前変更で変わる（R-6）
+- ファイルシステムから得た名前は `normalize('NFC')` してから使う（`list()` は NFD を返す。ADR 0021）
+- 走査は 50 フォルダごとに `await` して、画面の描画・操作に順番を譲る
 - アプリ自身の変更（9.1〜9.4）では `scanned_modified_at` を更新しない。変更したフォルダは次の反映で読み直されるが、結果は同じになる（ADR 0020）
 - 途中で例外が出たら、そのノート・ノートブックだけを飛ばして続け、最後にまとめて開発ビルドのログに出す（NFR-R-04）
 

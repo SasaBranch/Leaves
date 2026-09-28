@@ -73,6 +73,8 @@ export type CapturedImage = { uri: string; width: number; height: number };
 export type SearchHit = {
   noteId: NoteId;
   noteTitle: string;
+  /** サムネイルのキャッシュを画像の差し替えに追従させるため（ADR 0022） */
+  noteUpdatedAt: IsoDateTime;
   pageId: PageId;
   pagePosition: number;
   /** 例: ['大学', '線形代数'] */

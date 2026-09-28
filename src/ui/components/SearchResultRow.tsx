@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { SearchHit } from '@/domain/types';
 import { useShelf } from '@/state/openShelf';
 import { thumbnailFile } from '@/storage/paths';
+import { storedImageSource } from '@/ui/imageSource';
 import { useTheme } from '@/theme/useTheme';
 
 const THUMBNAIL_WIDTH = 50;
@@ -26,7 +27,7 @@ export function SearchResultRow({ hit, onPress }: { hit: SearchHit; onPress: () 
     >
       <View style={[styles.thumbnail, { backgroundColor: colors.paper }]}>
         <Image
-          source={{ uri: thumbnailFile(shelf.id, hit.pageId).uri }}
+          source={storedImageSource(thumbnailFile(shelf.id, hit.pageId), hit.noteUpdatedAt)}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           recyclingKey={hit.pageId}

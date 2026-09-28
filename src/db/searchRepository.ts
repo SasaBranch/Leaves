@@ -14,6 +14,7 @@ type SearchRow = {
   position: number;
   note_id: string;
   notebook_id: string | null;
+  updated_at: string;
 };
 
 const ELLIPSIS = '…';
@@ -63,7 +64,7 @@ async function queryMatchingPages(
               row_number() OVER (PARTITION BY note_id ORDER BY position) AS page_rank
        FROM matched
      )
-     SELECT page_id, title, ocr_text, position, note_id, notebook_id
+     SELECT page_id, title, ocr_text, position, note_id, notebook_id, updated_at
      FROM ranked
      WHERE is_text_match = 1 OR (note_has_text_match = 0 AND page_rank = 1)
      ORDER BY updated_at DESC, position
@@ -81,6 +82,7 @@ function toSearchHit(row: SearchRow, keyword: string, notebooks: Notebook[]): Se
   return {
     noteId: row.note_id as NoteId,
     noteTitle: row.title,
+    noteUpdatedAt: row.updated_at,
     pageId: row.page_id as PageId,
     pagePosition: row.position,
     notebookPath: buildNotebookPath(row.notebook_id as NotebookId | null, notebooks),

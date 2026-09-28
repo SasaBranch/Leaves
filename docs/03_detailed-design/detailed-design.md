@@ -851,7 +851,7 @@ export async function syncShelf(shelf: OpenShelf): Promise<void> {
 - アプリ自身の変更（9.1〜9.4）では `scanned_modified_at` を更新しない。変更したフォルダは次の反映で読み直されるが、結果は同じになる（ADR 0020）
 - 途中で例外が出たら、そのノート・ノートブックだけを飛ばして続け、最後にまとめて開発ビルドのログに出す（NFR-R-04）
 
-**上書きされたページ画像（`refreshReplacedPages`、ADR 0022）**: 上書きはフォルダの更新日時を変えないため、走査では気づけない。ノート表示（SC-5）を開いたときに、そのノートのページのファイルサイズ・更新日時を `.leaves.json` と比べ、変わっていればサムネイルを作り直して文字認識をやり直す（`.leaves.json` → DB の順）。保存済みの画像の表示元は `storedImageSource(file, note.updatedAt)` とし、キャッシュのキーにノートの更新日時を含める
+**上書きされたページ画像（`refreshReplacedPages`、ADR 0022）**: 上書きはフォルダの更新日時を変えないため、走査では気づけない。ノート表示（SC-5）を開いたときに、そのノートのページのファイルサイズ・更新日時を `.leaves.json` と比べ、変わっていればサムネイルを作り直して文字認識をやり直す（`.leaves.json` → DB の順）。保存済みの画像の表示元は `storedImageSource(file, note.updatedAt)` とし、キャッシュのキーにノートの更新日時を含める。検索結果（`SearchHit.noteUpdatedAt`）も同じくノートの更新日時をキーに含め、ADR 0022 の「検索結果の行は再起動まで古い」制約を解消した
 
 ### 9.10 v1.0 のデータの移行（`services/legacyMigration.ts`）
 `Documents/SQLite/leaves.db` があれば、本棚フォルダが1つもない場合に限り行う（基本設計書 6.9）。

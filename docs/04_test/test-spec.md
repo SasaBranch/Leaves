@@ -3,11 +3,11 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves テスト仕様書 |
-| 版数 | 0.2 |
+| 版数 | 1.0 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
-| ステータス | レビュー待ち |
-| 入力文書 | [要件定義書 v1.1](../01_requirements/requirements.md)、[基本設計書 v1.0](../02_basic-design/basic-design.md)、[詳細設計書](../03_detailed-design/detailed-design.md)、[ADR](../adr/README.md) |
+| ステータス | 確定 |
+| 入力文書 | [要件定義書 v1.2](../01_requirements/requirements.md)、[基本設計書 v1.1](../02_basic-design/basic-design.md)、[詳細設計書](../03_detailed-design/detailed-design.md)、[ADR](../adr/README.md) |
 
 ### 改訂履歴
 
@@ -15,6 +15,7 @@
 |---|---|---|
 | 0.1 | 2026-09-28 | 初版作成 |
 | 0.2 | 2026-09-28 | 本棚（4.7）とファイルとしての保存・外部変更の反映（4.8）、NFR-P-07 を追加（要件定義書 v1.2、#44） |
+| 1.0 | 2026-09-28 | レビュー完了、確定 |
 
 ---
 

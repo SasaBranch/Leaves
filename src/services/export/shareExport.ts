@@ -51,7 +51,7 @@ export async function shareExport(
 }
 
 /** 消せなかったファイルは起動時の後始末が消すため、失敗しても例外にしない（共有自体は済んでいるため） */
-function deleteExportFile(file: ExportFile): void {
+export function deleteExportFile(file: ExportFile): void {
   try {
     const exported = new File(file.uri);
     if (exported.exists) exported.delete();

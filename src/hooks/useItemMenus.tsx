@@ -7,7 +7,7 @@ import { Alert } from 'react-native';
 import { NOTEBOOK_COLORS } from '@/config';
 import { countNotebookContents } from '@/db/notebookRepository';
 import { isAppError } from '@/domain/errors';
-import type { Notebook, NotebookId, NoteSummary } from '@/domain/types';
+import type { Notebook, NotebookId, NoteSummary, SortOrder } from '@/domain/types';
 import {
   changeNotebookColor,
   createNotebook,
@@ -26,6 +26,12 @@ import { showingErrors } from '@/ui/showingErrors';
 const COLOR_NAMES = ['モス', 'ティール', 'ブラウン', 'リーフ', 'スレート', 'ワイン'];
 
 type Menu = { title: string; items: ActionMenuItem[] };
+
+/**
+ * exportTogetherSort: 「まとめて書き出し」を出すときの、今の並び順（SC-12 の最初の順番に使う）。
+ * ノートブック画面のヘッダーで、直下にノートがあるときだけ渡す（詳細設計書 9.14）
+ */
+type NotebookMenuOptions = { exportTogetherSort?: SortOrder };
 type Prompt = {
   title: string;
   initialValue?: string;
@@ -34,7 +40,7 @@ type Prompt = {
 };
 
 export function useItemMenus(): {
-  openNotebookMenu: (notebook: Notebook) => void;
+  openNotebookMenu: (notebook: Notebook, options?: NotebookMenuOptions) => void;
   openNoteMenu: (note: NoteSummary) => void;
   openCreateNotebook: (parentId: NotebookId | null) => void;
   menusElement: ReactElement;
@@ -52,7 +58,7 @@ export function useItemMenus(): {
       }),
     });
 
-  const openNotebookMenu = (notebook: Notebook) =>
+  const openNotebookMenu = (notebook: Notebook, options: NotebookMenuOptions = {}) =>
     setMenu({
       title: notebook.name,
       items: [
@@ -78,6 +84,18 @@ export function useItemMenus(): {
             }),
         },
         { label: '中のノートブックを作成', onPress: () => openCreateNotebook(notebook.id) },
+        ...(options.exportTogetherSort
+          ? [
+              {
+                label: 'まとめて書き出し',
+                onPress: () =>
+                  router.push({
+                    pathname: '/notebook/[id]/export',
+                    params: { id: notebook.id, sort: options.exportTogetherSort },
+                  }),
+              },
+            ]
+          : []),
         {
           label: '移動',
           onPress: () =>

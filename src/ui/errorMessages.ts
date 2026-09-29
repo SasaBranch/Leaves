@@ -14,4 +14,5 @@ export const errorMessages: Record<AppErrorKind, string> = {
   cameraPermissionDenied: 'カメラへのアクセスが許可されていません。設定アプリから許可してください',
   pageEditFailed: 'ページを編集できませんでした',
   exportFailed: '書き出しに失敗しました。もう一度お試しください',
+  exportNoteMissing: '書き出すノートが見つからないため、中止しました。一覧を読み直しました',
 };

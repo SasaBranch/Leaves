@@ -12,6 +12,7 @@ export type AppErrorKind =
   | 'storageFull' // 空き容量不足
   | 'cameraPermissionDenied'
   | 'exportFailed'
+  | 'exportNoteMissing' // まとめて書き出しの途中でノートが見つからない
   | 'pageEditFailed'; // ページの編集（台形補正・回転・元に戻す）に失敗
 
 export class AppError extends Error {

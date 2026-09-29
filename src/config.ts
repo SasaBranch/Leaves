@@ -67,3 +67,6 @@ export const EDIT_MAGNIFIER_SCALE = 2;
 export const ICLOUD_RESYNC_DELAY_MS = 5000;
 /** 上の再反映の回数の上限（約30秒）。それ以降は次に前面に戻ったときに反映する */
 export const ICLOUD_RESYNC_MAX_TIMES = 6;
+
+/** まとめて書き出しの Markdown で、ノートのフォルダ名の先頭に付ける番号の最低の桁数（01_, 02_ …）。詳細設計書 9.14 */
+export const EXPORT_FOLDER_NUMBER_MIN_DIGITS = 2;

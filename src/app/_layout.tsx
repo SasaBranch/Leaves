@@ -26,6 +26,7 @@ const MODAL_SCREENS = [
   'settings',
   'note/[id]/reorder',
   'note/[id]/edit',
+  'notebook/[id]/export',
 ];
 
 export default function RootLayout() {

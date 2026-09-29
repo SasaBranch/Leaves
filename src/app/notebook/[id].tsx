@@ -59,7 +59,11 @@ export default function NotebookScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="このノートブックの操作"
-            onPress={() => openNotebookMenu(notebook)}
+            onPress={() =>
+              openNotebookMenu(notebook, {
+                exportTogetherSort: notes.length > 0 ? sort : undefined,
+              })
+            }
             style={styles.iconButton}
           >
             <Ellipsis size={22} color={colors.muted} />

@@ -3,11 +3,11 @@
 | 項目 | 内容 |
 |---|---|
 | 文書名 | Leaves 詳細設計書 |
-| 版数 | 2.4 |
+| 版数 | 2.5 |
 | 作成日 | 2026-09-28 |
 | 作成者 | SasaBranch |
 | ステータス | 確定 |
-| 入力文書 | [要件定義書 v1.5](../01_requirements/requirements.md) / [基本設計書 v1.5](../02_basic-design/basic-design.md) / [ADR](../adr/README.md) |
+| 入力文書 | [要件定義書 v1.6](../01_requirements/requirements.md) / [基本設計書 v1.7](../02_basic-design/basic-design.md) / [ADR](../adr/README.md) |
 
 ### 改訂履歴
 
@@ -26,6 +26,7 @@
 | 2.2 | 2026-09-28 | 9.9 上書きされたページ画像の反映を追加（ADR 0022） |
 | 2.3 | 2026-09-28 | ページの編集（基本設計書 v1.2 SC-11・6.11）。4.1, 4.5, 5.1〜5.2, 8, 9.12, 10, 12 章。ADR 0023 |
 | 2.4 | 2026-09-28 | 本棚の保存場所（基本設計書 v1.5 6.8・6.12）。4.5, 5.1, 9.8, 9.9, 9.13 を追加・変更。ADR 0025 |
+| 2.5 | 2026-09-29 | まとめて書き出し（基本設計書 v1.7 SC-12・6.4）。4.1, 9.5, 9.14, 10 章 |
 
 ---
 
@@ -174,6 +175,7 @@ src/
 │   ├── search.tsx                 … SC-7 検索
 │   ├── move.tsx                   … SC-8 移動先選択
 │   ├── note/[id]/edit.tsx         … SC-11 ページ編集（?page={pageId}）
+│   ├── notebook/[id]/export.tsx   … SC-12 まとめて書き出し（?sort={SortOrder}）
 │   └── settings.tsx               … SC-10 設定（SC-9 は ui/components/WelcomeScreen.tsx）
 ├── domain/
 │   ├── types.ts                   … 型定義（5 章）
@@ -220,6 +222,7 @@ src/
 │   ├── startup.ts                 … 起動時処理（旧 integrity.ts。9.6）
 │   └── export/
 │       ├── shareExport.ts         … 書き出しの共通手順と形式の対応表
+│       ├── combinedExport.ts      … まとめて書き出し（9.14）
 │       ├── pdf.ts
 │       ├── markdown.ts
 │       └── pageImage.ts
@@ -935,6 +938,65 @@ export function removeShelfFromList(shelf: Shelf): void;                       /
 - ダウンロード待ちがあった場合は、`ICLOUD_RESYNC_DELAY_MS` 後にもう一度反映する（最大 `ICLOUD_RESYNC_MAX_TIMES` 回）
 - 未ダウンロードの見え方（`.名前.icloud` か、中身のないファイルか）は事前検証 R-10 で確かめ、違えば本節を直す
 
+### 9.14 まとめて書き出し（`services/export/combinedExport.ts`、基本設計書 SC-12・6.4）
+
+**サービス**
+
+```ts
+export type CombinedExportFormat = 'pdf' | 'markdown';
+export type CombinedExportProgress = { finishedNotes: number; totalNotes: number };
+
+/**
+ * noteIds の順に1つのファイルにまとめ、共有シートを開く。
+ * signal で取り消されたら作りかけのファイルを消して 'canceled' を返す（取り消しは失敗ではないため例外にしない）
+ */
+export async function shareCombinedExport(
+  shelf: OpenShelf,
+  format: CombinedExportFormat,
+  notebookId: NotebookId,
+  noteIds: NoteId[],
+  options: { signal: AbortSignal; onProgress: (progress: CombinedExportProgress) => void },
+): Promise<'shared' | 'canceled'>;
+```
+
+- 取り消しの確認は **1ページごと**（ページの画像の読み込み・埋め込みの合間）に `signal.aborted` を見る。内部では専用の例外で抜け、`shareCombinedExport` が `'canceled'` に変える
+- 進み具合は1ノート終わるごとに `onProgress` で知らせる
+- 始める前に、すべてのノートが DB にあり、フォルダが見つかることを確かめる。なければ `AppError('exportNoteMissing')`（途中で消された場合も同じ）
+- 作ったファイルの共有・後始末は 9.5 の `shareExport` と同じ手順（共有シートを閉じたら消す）。共通部分は `shareExport.ts` から切り出して両方で使う
+
+**PDF（`pdf.ts` を分けて共用する）**
+- `buildPdf`（単体）の中身を次の3つに分け、単体とまとめての両方から使う
+  - `createExportPdf()` … `PDFDocument` の作成とフォントの埋め込み
+  - `addNotePages(pdf, font, shelf, noteId, signal?)` … ノートの全ページを追加し、最初のページを返す
+  - `addOutline(pdf, entries: { title: string; page: PDFPage }[])` … しおりを付ける
+- pdf-lib にはしおりを作る関数がないため、PDF の辞書を直接組み立てる（基本設計書 R-12）
+  - カタログの `/Outlines` に `{ /Type /Outlines, /First, /Last, /Count }`
+  - 各項目は `{ /Title, /Parent, /Prev, /Next, /Dest [ページ /XYZ null null null] }`。タイトルは日本語を含むため `PDFHexString.fromText` で UTF-16 にする
+  - カタログの `/PageMode /UseOutlines` で、対応するビューアでは開いたときにしおりを出す
+- ファイル名: `{sanitizeFileName(ノートブック名)}.pdf`
+
+**Markdown（`markdown.ts` を分けて共用する）**
+- `buildMarkdownZip`（単体）の中身を `addNoteToZip(zip, shelf, noteId, folder: string)` に切り出す（単体では `folder = ''`）
+- まとめるときは、各ノートを `{番号}_{sanitizeFileName(タイトル)}/` に入れる。番号はノート数の桁数（最低2桁）でゼロ埋めする（`01_`, `02_` … 100 件以上なら `001_`）
+- 目次 `index.md`:
+
+```markdown
+# 線形代数
+
+1. [第1回 行列](<01_第1回 行列/第1回 行列.md>)
+2. [第3回 固有値と固有ベクトル](<02_第3回 固有値と固有ベクトル/第3回 固有値と固有ベクトル.md>)
+```
+
+  リンク先は空白を含むため `<…>` で囲む（CommonMark）
+- ファイル名: `{sanitizeFileName(ノートブック名)}.zip`
+
+**画面（`src/app/notebook/[id]/export.tsx`）**
+- パラメータ: `id`（ノートブック）、`sort`（SC-2 の今の並び順。最初の順番に使う）
+- 一覧は `useNotebook(id, sort)` の `notes`（直下のノート）。画面の状態は `rows: { noteId, selected }[]`（最初は全件選択）だけを持ち、並べ替えは react-native-reorderable-list（SC-6 と同じ）
+- 書き出し中は `AbortController` を持ち、「取り消す」で `abort()` する。終わったら（共有シートを閉じたら）`router.back()`
+- `exportNoteMissing` のときは一覧を読み直す（消えたノートが一覧から消える）
+- 入口: SC-2 のヘッダーの「…」（ノートブックのメニュー）に「まとめて書き出し」を足す。直下にノートがあるときだけ出す（`useItemMenus` の `openNotebookMenu` に、出すかどうかの引数を足す）。子ノートブックの長押しメニューには出さない
+
 ### 9.12 ページの編集（`services/pageEdits.ts`、基本設計書 6.11）
 
 ```ts
@@ -1012,6 +1074,7 @@ export type AppErrorKind =
   | 'cameraPermissionDenied'
   | 'photoPermissionDenied'
   | 'exportFailed'
+  | 'exportNoteMissing'    // まとめて書き出しの途中でノートが見つからない
   | 'pageEditFailed';      // ページの編集（台形補正・回転・元に戻す）に失敗
 ```
 

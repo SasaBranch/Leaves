@@ -4,6 +4,7 @@ import type { Directory } from 'expo-file-system';
 import { ChevronRight } from 'lucide-react-native';
 import { useState } from 'react';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -80,95 +81,100 @@ export function WelcomeScreen({ onCreated }: { onCreated: (shelf: Shelf) => Prom
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.bg }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.body}
+        style={styles.screen}
       >
-        <View style={styles.logo}>
-          <LeavesMark size={LOGO_MARK_SIZE} />
-          <Text style={[styles.logoText, { color: colors.text, fontFamily: fonts.logo }]}>
-            Leaves
+        {/* 入力欄の外をタップするとキーボードを閉じる（「完了」キーは本棚の作成になるため、ほかに閉じる手段がない） */}
+        <Pressable accessible={false} onPress={Keyboard.dismiss} style={styles.body}>
+          <View style={styles.logo}>
+            <LeavesMark size={LOGO_MARK_SIZE} />
+            <Text style={[styles.logoText, { color: colors.text, fontFamily: fonts.logo }]}>
+              Leaves
+            </Text>
+          </View>
+          <Text style={[styles.lead, { color: colors.text, fontFamily: fonts.bold }]}>
+            紙のノートをしまう本棚を作りましょう
           </Text>
-        </View>
-        <Text style={[styles.lead, { color: colors.text, fontFamily: fonts.bold }]}>
-          紙のノートをしまう本棚を作りましょう
-        </Text>
 
-        <View style={styles.field}>
-          <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12 }}>
-            本棚の名前
-          </Text>
-          <TextInput
-            autoFocus
-            value={name}
-            onChangeText={setName}
-            onSubmitEditing={create}
-            returnKeyType="done"
-            accessibilityLabel="本棚の名前"
-            style={[
-              styles.input,
-              {
-                color: colors.text,
-                borderColor: colors.accent,
-                backgroundColor: colors.surface2,
-                fontFamily: fonts.regular,
-              },
-            ]}
-          />
-          {errorMessage ? (
-            <Text style={{ color: colors.danger, fontFamily: fonts.medium }}>{errorMessage}</Text>
+          <View style={styles.field}>
+            <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12 }}>
+              本棚の名前
+            </Text>
+            <TextInput
+              autoFocus
+              value={name}
+              onChangeText={setName}
+              onSubmitEditing={create}
+              returnKeyType="done"
+              accessibilityLabel="本棚の名前"
+              style={[
+                styles.input,
+                {
+                  color: colors.text,
+                  borderColor: colors.accent,
+                  backgroundColor: colors.surface2,
+                  fontFamily: fonts.regular,
+                },
+              ]}
+            />
+            {errorMessage ? (
+              <Text style={{ color: colors.danger, fontFamily: fonts.medium }}>{errorMessage}</Text>
+            ) : null}
+          </View>
+          {canUseOtherLocations ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="保存場所"
+              disabled={isCreating}
+              onPress={() => setIsLocationMenuOpen(true)}
+              style={[styles.locationRow, { backgroundColor: colors.surface }]}
+            >
+              <View style={styles.locationText}>
+                <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12 }}>
+                  保存場所
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}
+                >
+                  {parent
+                    ? `選んだ場所: ${entryName(parent)}`
+                    : 'アプリ内（このiPhone内 > Leaves）'}
+                </Text>
+              </View>
+              <ChevronRight size={20} color={colors.muted} />
+            </Pressable>
           ) : null}
-        </View>
-        {canUseOtherLocations ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="保存場所"
-            disabled={isCreating}
-            onPress={() => setIsLocationMenuOpen(true)}
-            style={[styles.locationRow, { backgroundColor: colors.surface }]}
-          >
-            <View style={styles.locationText}>
-              <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 12 }}>
-                保存場所
-              </Text>
-              <Text
-                numberOfLines={1}
-                style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}
-              >
-                {parent ? `選んだ場所: ${entryName(parent)}` : 'アプリ内（このiPhone内 > Leaves）'}
-              </Text>
-            </View>
-            <ChevronRight size={20} color={colors.muted} />
-          </Pressable>
-        ) : null}
-        <Text style={[styles.note, { color: colors.muted, fontFamily: fonts.regular }]}>
-          {parent ? '本棚は選んだ場所の中にフォルダとして作られます' : appShelfNote}
-        </Text>
-
-        {/* 入力欄のすぐ下に置く（下端に寄せると Android でキーボードに隠れるため） */}
-        <Pressable
-          accessibilityRole="button"
-          disabled={isCreating}
-          onPress={create}
-          style={[
-            styles.createButton,
-            { backgroundColor: colors.accent, opacity: isCreating ? 0.6 : 1 },
-          ]}
-        >
-          <Text style={{ color: colors.onAccent, fontFamily: fonts.bold, fontSize: 17 }}>
-            本棚を作成
+          <Text style={[styles.note, { color: colors.muted, fontFamily: fonts.regular }]}>
+            {parent ? '本棚は選んだ場所の中にフォルダとして作られます' : appShelfNote}
           </Text>
-        </Pressable>
-        {canUseOtherLocations ? (
+
+          {/* 入力欄のすぐ下に置く（下端に寄せると Android でキーボードに隠れるため） */}
           <Pressable
             accessibilityRole="button"
             disabled={isCreating}
-            onPress={openExistingFolder}
-            style={styles.linkButton}
+            onPress={create}
+            style={[
+              styles.createButton,
+              { backgroundColor: colors.accent, opacity: isCreating ? 0.6 : 1 },
+            ]}
           >
-            <Text style={{ color: colors.accentText, fontFamily: fonts.medium, fontSize: 15 }}>
-              既存のフォルダを本棚として開く
+            <Text style={{ color: colors.onAccent, fontFamily: fonts.bold, fontSize: 17 }}>
+              本棚を作成
             </Text>
           </Pressable>
-        ) : null}
+          {canUseOtherLocations ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={isCreating}
+              onPress={openExistingFolder}
+              style={styles.linkButton}
+            >
+              <Text style={{ color: colors.accentText, fontFamily: fonts.medium, fontSize: 15 }}>
+                既存のフォルダを本棚として開く
+              </Text>
+            </Pressable>
+          ) : null}
+        </Pressable>
       </KeyboardAvoidingView>
 
       <ActionMenu

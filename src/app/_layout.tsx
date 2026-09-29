@@ -52,8 +52,11 @@ export default function RootLayout() {
           {/* 閉じている間に反映すると、移動の途中の本棚を「削除された」とみなしてしまうため止める */}
           {isReopening ? null : <SyncOnForeground shelf={shelf} switchShelf={switchShelf} />}
           {/* 本棚を切り替えたら画面の木を作り直す（前の本棚のデータを持った画面を残さないため。詳細設計書 4.4） */}
+          {/* 最初の画面を明示する。省くと、作り直したとき（本棚がない状態から作成したときなど）に
+              画面の並びの先頭（capture）が最初の画面になり、真っ白で操作できなくなる */}
           <Stack
             key={shelf.id}
+            initialRouteName="index"
             screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
           >
             {MODAL_SCREENS.map((name) => (

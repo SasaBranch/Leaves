@@ -19,6 +19,7 @@ import {
   openFolderAsShelf,
   removeShelfFromList,
   renameShelf,
+  shelfParentFolderName,
 } from './shelves';
 
 jest.mock('@/db/openShelfDatabase', () => ({ openShelfDatabase: jest.fn() }));
@@ -208,6 +209,19 @@ describe('別の場所の本棚（FR-L-01〜05）', () => {
       kind: 'duplicateShelfName',
     });
     expect(fs.existsSync(documentsPath(TEST_SHELF_NAME))).toBe(true);
+  });
+
+  test('入っているフォルダの名前を返す。アプリ内・アクセスできない・iCloud Drive の一番上は null（FR-L-07）', () => {
+    const inFolder = createShelf('大学', externalFolder('書類'));
+    expect(shelfParentFolderName(inFolder)).toBe('書類');
+    expect(shelfParentFolderName(listShelves().find((entry) => entry.location === 'app')!)).toBe(
+      null,
+    );
+    const atICloudRoot = createShelf('仕事', externalFolder('com~apple~CloudDocs'));
+    expect(shelfParentFolderName(atICloudRoot)).toBe(null);
+    fs.rmSync(path.join(nodePathOf(externalFolder('書類').uri), '大学'), { recursive: true });
+    const unavailable = listShelves().find((entry) => entry.id === inFolder.id)!;
+    expect(shelfParentFolderName(unavailable)).toBe(null);
   });
 
   test('一覧から外すとフォルダは残り、削除するとフォルダごと消える（FR-L-05）', () => {

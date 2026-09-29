@@ -1,4 +1,4 @@
-// SC-10 設定（基本設計書 4.3）。本棚の管理と、保存場所の案内だけを置く
+// SC-10 設定（基本設計書 4.3）。本棚の管理（各本棚の場所を含む）と、アプリの情報だけを置く
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import type { Directory } from 'expo-file-system';
@@ -35,7 +35,7 @@ import { useTheme } from '@/theme/useTheme';
 import { ActionMenu, type ActionMenuItem } from '@/ui/components/ActionMenu';
 import { TextPromptModal } from '@/ui/components/TextPromptModal';
 import { errorMessages } from '@/ui/errorMessages';
-import { canUseOtherLocations, shelfLocationLabels } from '@/ui/shelfLocations';
+import { canUseOtherLocations, shelfLocationPath } from '@/ui/shelfLocations';
 import { showingErrors } from '@/ui/showingErrors';
 
 type Menu = { title: string; items: ActionMenuItem[] };
@@ -269,7 +269,7 @@ export default function SettingsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Section title="本棚">
+        <Section title="本棚" footer={shelvesFooter}>
           {shelves.map((shelf) => (
             <View key={shelf.id} style={[styles.row, { borderColor: colors.border }]}>
               <Pressable
@@ -305,7 +305,7 @@ export default function SettingsScreen() {
                         { color: colors.muted, fontFamily: fonts.regular },
                       ]}
                     >
-                      {shelfLocationLabels[shelf.location]}
+                      {shelfLocationPath(shelf)}
                     </Text>
                   ) : null}
                 </View>
@@ -354,26 +354,6 @@ export default function SettingsScreen() {
           ) : null}
         </Section>
 
-        <Section title="保存場所">
-          {canUseOtherLocations ? (
-            <View style={styles.textBlock}>
-              <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}>
-                アプリ内の本棚は「ファイル」アプリ {'>'} このiPhone内 {'>'} Leaves にあります
-              </Text>
-              <Text style={{ color: colors.muted, fontFamily: fonts.regular, fontSize: 13 }}>
-                Mac とケーブルでつなぐと Finder からも開けます
-              </Text>
-            </View>
-          ) : (
-            // Android のアプリ内の本棚は外から見えない（ADR 0026）
-            <View style={styles.textBlock}>
-              <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}>
-                本棚はアプリの中に保存されます
-              </Text>
-            </View>
-          )}
-        </Section>
-
         <Section title="情報">
           <View style={[styles.row, styles.infoRow]}>
             <Text style={{ color: colors.text, fontFamily: fonts.medium, fontSize: 15 }}>
@@ -415,7 +395,16 @@ export default function SettingsScreen() {
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+/** footer: 枠の下に添える小さな注記（押せる項目と見間違えないよう、枠の外に出す） */
+function Section({
+  title,
+  footer,
+  children,
+}: {
+  title: string;
+  footer?: string;
+  children: ReactNode;
+}) {
   const { colors, fonts } = useTheme();
   return (
     <View style={styles.section}>
@@ -426,9 +415,19 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
         {title}
       </Text>
       <View style={[styles.card, { backgroundColor: colors.surface }]}>{children}</View>
+      {footer ? (
+        <Text style={[styles.sectionFooter, { color: colors.muted, fontFamily: fonts.regular }]}>
+          {footer}
+        </Text>
+      ) : null}
     </View>
   );
 }
+
+/** Android のアプリ内の本棚は外から見えない（ADR 0026） */
+const shelvesFooter = canUseOtherLocations
+  ? 'Mac とケーブルでつなぐと Finder からも開けます'
+  : '本棚はアプリの中に保存されます';
 
 function alertFailure(fallback: string) {
   return (error: unknown) => {
@@ -449,6 +448,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 32, gap: 26 },
   section: { gap: 8 },
   sectionTitle: { fontSize: 13, paddingHorizontal: 4 },
+  sectionFooter: { fontSize: 12, lineHeight: 17, paddingHorizontal: 4 },
   card: { borderRadius: 14, overflow: 'hidden' },
   row: {
     minHeight: 52,
@@ -462,7 +462,6 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, fontSize: 16 },
   rowTexts: { flex: 1, paddingVertical: 6, gap: 2 },
   rowSubText: { fontSize: 12 },
-  textBlock: { padding: 14, gap: 6 },
   infoRow: { justifyContent: 'space-between', paddingHorizontal: 14 },
   overlay: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
   overlayCard: {

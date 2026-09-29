@@ -49,6 +49,23 @@ export function locateShelfDirectory(shelf: Shelf): Directory | null {
   return entry ? (openExternalEntry(entry)?.directory ?? null) : null;
 }
 
+/** iCloud Drive の一番上のフォルダの名前（端末上の実際の名前） */
+const ICLOUD_DRIVE_ROOT_FOLDER_NAME = 'com~apple~CloudDocs';
+
+/**
+ * 別の場所の本棚が入っているフォルダの名前（設定画面で場所を示すため。FR-L-07）。
+ * アプリ内の本棚・アクセスできない本棚・iCloud Drive の一番上に置いた本棚は null
+ */
+export function shelfParentFolderName(shelf: Shelf): string | null {
+  if (shelf.location === 'app' || !shelf.available) return null;
+  const directory = locateShelfDirectory(shelf);
+  if (!directory) return null;
+  // 場所を開くとアクセスが始まるため、名前を読んだら止める（開いている本棚のアクセスは別に数えられている）
+  const parentName = entryName(directory.parentDirectory);
+  stopAccessingFolder(directory);
+  return parentName === ICLOUD_DRIVE_ROOT_FOLDER_NAME ? null : parentName;
+}
+
 export type OpenShelfLocation =
   | { kind: 'unchanged' }
   | { kind: 'renamed'; shelf: Shelf }
